@@ -18,8 +18,21 @@ import {
   NDivider,
   NAlert,
   NButtonGroup,
+  NModal,
+  NTabs,
+  NTabPane,
+  NForm,
+  NFormItem,
+  NInput,
+  NCheckbox,
+  NCheckboxGroup,
+  NSwitch,
+  NUpload,
+  NUploadDragger,
   type DataTableColumns,
   type SelectOption,
+  type FormInst,
+  type UploadCustomRequestOptions,
 } from 'naive-ui'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -46,6 +59,9 @@ import {
   RefreshCw,
   Calendar,
   Gauge,
+  Settings,
+  Upload,
+  X,
 } from 'lucide-vue-next'
 import { useHealthStore } from '@/stores/health'
 import {
@@ -60,6 +76,16 @@ import {
   type HealthSuggestion,
 } from '@/utils/reportGenerator'
 import { generateHealthReportPdf } from '@/utils/pdf'
+import {
+  type ReportTemplateType,
+  type PdfExportConfig,
+  type ReportSectionKey,
+  DEFAULT_PDF_COVER_CONFIG,
+  DEFAULT_PDF_SECTION_CONFIG,
+  DEFAULT_PDF_HEADER_FOOTER_CONFIG,
+  REPORT_TEMPLATE_OPTIONS,
+  REPORT_SECTION_OPTIONS,
+} from '@/types'
 
 use([
   CanvasRenderer,
@@ -87,6 +113,108 @@ const isGenerating = ref(false)
 const isExporting = ref(false)
 const generatedReport = ref<HealthReport | null>(null)
 const keyTrends = ref<KeyIndicatorTrend[]>([])
+
+const showExportModal = ref(false)
+const pdfConfigFormRef = ref<FormInst | null>(null)
+const pdfConfig = ref<PdfExportConfig>({
+  template: 'detailed',
+  cover: { ...DEFAULT_PDF_COVER_CONFIG },
+  sections: { ...DEFAULT_PDF_SECTION_CONFIG },
+  headerFooter: { ...DEFAULT_PDF_HEADER_FOOTER_CONFIG },
+})
+const logoPreviewUrl = ref<string | null>(null)
+const activeTab = ref<string>('template')
+
+function openExportModal() {
+  if (!generatedReport.value) {
+    message.warning('请先生成报告')
+    return
+  }
+  pdfConfig.value = {
+    template: 'detailed',
+    cover: { ...DEFAULT_PDF_COVER_CONFIG },
+    sections: { ...DEFAULT_PDF_SECTION_CONFIG },
+    headerFooter: { ...DEFAULT_PDF_HEADER_FOOTER_CONFIG },
+  }
+  logoPreviewUrl.value = null
+  activeTab.value = 'template'
+  showExportModal.value = true
+}
+
+function closeExportModal() {
+  showExportModal.value = false
+}
+
+function handleLogoUpload({ file }: UploadCustomRequestOptions) {
+  const fileObj = file.file as File
+  if (!fileObj) return
+  if (!fileObj.type.startsWith('image/')) {
+    message.error('请上传图片文件')
+    return
+  }
+  if (fileObj.size > 2 * 1024 * 1024) {
+    message.error('图片大小不能超过 2MB')
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const dataUrl = e.target?.result as string
+    logoPreviewUrl.value = dataUrl
+    pdfConfig.value.cover.logoDataUrl = dataUrl
+    message.success('Logo 上传成功')
+  }
+  reader.readAsDataURL(fileObj)
+}
+
+function removeLogo() {
+  logoPreviewUrl.value = null
+  pdfConfig.value.cover.logoDataUrl = null
+}
+
+function onTemplateChange(value: ReportTemplateType) {
+  if (value === 'simple') {
+    pdfConfig.value.sections = {
+      photos: false,
+      indicators: false,
+      trends: false,
+      lifestyle: false,
+      risk: false,
+      comparison: false,
+      suggestions: true,
+    }
+  } else if (value === 'medical') {
+    pdfConfig.value.sections = {
+      photos: false,
+      indicators: false,
+      trends: true,
+      lifestyle: false,
+      risk: false,
+      comparison: true,
+      suggestions: true,
+    }
+  } else {
+    pdfConfig.value.sections = { ...DEFAULT_PDF_SECTION_CONFIG }
+  }
+}
+
+async function confirmExportPdf() {
+  isExporting.value = true
+  try {
+    await generateHealthReportPdf(
+      generatedReport.value!,
+      keyTrends.value,
+      store.indicators,
+      pdfConfig.value
+    )
+    message.success('PDF 导出成功')
+    showExportModal.value = false
+  } catch (e) {
+    console.error(e)
+    message.error('PDF 导出失败')
+  } finally {
+    isExporting.value = false
+  }
+}
 
 const dimensionOptions = [
   { label: '单次报告', value: 'single' },
@@ -169,21 +297,7 @@ function generateReport() {
 }
 
 async function handleExportPdf() {
-  if (!generatedReport.value) {
-    message.warning('请先生成报告')
-    return
-  }
-
-  isExporting.value = true
-  try {
-    await generateHealthReportPdf(generatedReport.value, keyTrends.value, store.indicators)
-    message.success('PDF 导出成功')
-  } catch (e) {
-    console.error(e)
-    message.error('PDF 导出失败')
-  } finally {
-    isExporting.value = false
-  }
+  openExportModal()
 }
 
 const overallLevelInfo = computed(() => {
@@ -883,5 +997,141 @@ onMounted(() => {
       :description="generatedReport ? '所选时间范围内暂无体检记录，请选择其他时间范围' : '请点击上方「生成报告」按钮生成报告'"
       style="padding: 80px 0;"
     />
+
+    <NModal
+      v-model:show="showExportModal"
+      preset="dialog"
+      title="PDF 导出设置"
+      :mask-closable="false"
+      :content-style="{ width: '680px', maxHeight: '85vh', overflow: 'auto' }"
+      positive-text="确认导出"
+      negative-text="取消"
+      :loading="isExporting"
+      @positive-click="confirmExportPdf"
+      @negative-click="closeExportModal"
+    >
+      <NTabs v-model:value="activeTab" type="line">
+        <NTabPane name="template" tab="报告模板">
+          <div style="padding: 16px 0;">
+            <NGrid :cols="1" :y-gap="16">
+              <NGi v-for="opt in REPORT_TEMPLATE_OPTIONS" :key="opt.value">
+                <div
+                  :style="{
+                    padding: '16px',
+                    borderRadius: '8px',
+                    border: pdfConfig.template === opt.value ? '2px solid #4A90D9' : '1px solid #e0e0e0',
+                    backgroundColor: pdfConfig.template === opt.value ? '#f0f7ff' : '#fff',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }"
+                  @click="pdfConfig.template = opt.value as ReportTemplateType; onTemplateChange(opt.value as ReportTemplateType)"
+                >
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-size: 16px; font-weight: 600; color: #333;">{{ opt.label }}</span>
+                    <NCheckbox :checked="pdfConfig.template === opt.value" @update:checked="() => { pdfConfig.template = opt.value as ReportTemplateType; onTemplateChange(opt.value as ReportTemplateType); }" />
+                  </div>
+                  <div style="font-size: 13px; color: #666; line-height: 1.6;">{{ opt.description }}</div>
+                </div>
+              </NGi>
+            </NGrid>
+          </div>
+        </NTabPane>
+
+        <NTabPane name="cover" tab="自定义封面">
+          <div style="padding: 16px 0;">
+            <NForm label-placement="left" label-width="100px">
+              <NFormItem label="家庭名称">
+                <NInput
+                  v-model:value="pdfConfig.cover.familyName"
+                  placeholder="例如：王家健康档案"
+                  clearable
+                />
+              </NFormItem>
+              <NFormItem label="副标题">
+                <NInput
+                  v-model:value="pdfConfig.cover.subtitle"
+                  placeholder="例如：2024年度健康总结"
+                  clearable
+                />
+              </NFormItem>
+              <NFormItem label="头像/Logo">
+                <div v-if="logoPreviewUrl" style="display: flex; align-items: center; gap: 16px;">
+                  <img :src="logoPreviewUrl" style="width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid #e0e0e0;" />
+                  <NSpace>
+                    <NButton size="small" @click="removeLogo">
+                      <template #icon>
+                        <NIcon><X /></NIcon>
+                      </template>
+                      移除
+                    </NButton>
+                  </NSpace>
+                </div>
+                <NUpload
+                  v-else
+                  :custom-request="handleLogoUpload"
+                  :show-file-list="false"
+                  accept="image/*"
+                >
+                  <NUploadDragger style="padding: 20px;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                      <NIcon :size="28" color="#999"><Upload /></NIcon>
+                      <div style="font-size: 14px; color: #666;">点击或拖拽上传头像/Logo</div>
+                      <div style="font-size: 12px; color: #999;">支持 JPG、PNG 格式，大小不超过 2MB</div>
+                    </div>
+                  </NUploadDragger>
+                </NUpload>
+              </NFormItem>
+            </NForm>
+          </div>
+        </NTabPane>
+
+        <NTabPane name="sections" tab="章节选择">
+          <div style="padding: 16px 0;">
+            <div style="font-size: 13px; color: #666; margin-bottom: 12px;">勾选需要包含在 PDF 报告中的章节：</div>
+            <NGrid :cols="1" :y-gap="12">
+              <NGi v-for="opt in REPORT_SECTION_OPTIONS" :key="opt.value">
+                <div style="display: flex; align-items: flex-start; gap: 8px;">
+                  <NCheckbox
+                    :checked="pdfConfig.sections[opt.value]"
+                    @update:checked="(v: boolean) => { pdfConfig.sections[opt.value] = v }"
+                  />
+                  <div>
+                    <div style="font-size: 14px; font-weight: 500; color: #333;">{{ opt.label }}</div>
+                    <div style="font-size: 12px; color: #999; margin-top: 2px;">{{ opt.description }}</div>
+                  </div>
+                </div>
+              </NGi>
+            </NGrid>
+          </div>
+        </NTabPane>
+
+        <NTabPane name="headerFooter" tab="页眉页脚">
+          <div style="padding: 16px 0;">
+            <NForm label-placement="left" label-width="120px">
+              <NFormItem label="页眉文字">
+                <NInput
+                  v-model:value="pdfConfig.headerFooter.headerText"
+                  placeholder="例如：XX 家庭健康档案"
+                  clearable
+                />
+              </NFormItem>
+              <NFormItem label="显示页码">
+                <NSwitch v-model:value="pdfConfig.headerFooter.showPageNumber" />
+              </NFormItem>
+              <NFormItem label="显示生成日期">
+                <NSwitch v-model:value="pdfConfig.headerFooter.showGenerateDate" />
+              </NFormItem>
+              <NFormItem label="页脚文字">
+                <NInput
+                  v-model:value="pdfConfig.headerFooter.footerText"
+                  placeholder="例如：机密文件 请勿外传"
+                  clearable
+                />
+              </NFormItem>
+            </NForm>
+          </div>
+        </NTabPane>
+      </NTabs>
+    </NModal>
   </div>
 </template>

@@ -310,3 +310,95 @@ export interface LifestyleRecords {
   sleeps: SleepRecord[]
   vitalSigns: VitalSignRecord[]
 }
+
+export type ReportTemplateType = 'simple' | 'detailed' | 'medical'
+
+export interface PdfCoverConfig {
+  familyName: string
+  logoDataUrl: string | null
+  subtitle: string
+}
+
+export type ReportSectionKey =
+  | 'photos'
+  | 'indicators'
+  | 'trends'
+  | 'lifestyle'
+  | 'risk'
+  | 'comparison'
+  | 'suggestions'
+
+export interface PdfSectionConfig {
+  photos: boolean
+  indicators: boolean
+  trends: boolean
+  lifestyle: boolean
+  risk: boolean
+  comparison: boolean
+  suggestions: boolean
+}
+
+export interface PdfHeaderFooterConfig {
+  headerText: string
+  showPageNumber: boolean
+  showGenerateDate: boolean
+  footerText: string
+}
+
+export interface PdfExportConfig {
+  template: ReportTemplateType
+  cover: PdfCoverConfig
+  sections: PdfSectionConfig
+  headerFooter: PdfHeaderFooterConfig
+}
+
+export const DEFAULT_PDF_COVER_CONFIG: PdfCoverConfig = {
+  familyName: '',
+  logoDataUrl: null,
+  subtitle: '家庭健康档案',
+}
+
+export const DEFAULT_PDF_SECTION_CONFIG: PdfSectionConfig = {
+  photos: true,
+  indicators: true,
+  trends: true,
+  lifestyle: false,
+  risk: false,
+  comparison: true,
+  suggestions: true,
+}
+
+export const DEFAULT_PDF_HEADER_FOOTER_CONFIG: PdfHeaderFooterConfig = {
+  headerText: '家庭健康档案',
+  showPageNumber: true,
+  showGenerateDate: true,
+  footerText: '机密文件 请勿外传',
+}
+
+export const REPORT_TEMPLATE_OPTIONS: { label: string; value: ReportTemplateType; description: string }[] = [
+  {
+    label: '简约版',
+    value: 'simple',
+    description: '仅包含核心指标汇总和异常标注，适合快速浏览',
+  },
+  {
+    label: '详细版（默认）',
+    value: 'detailed',
+    description: '包含所有指标、趋势图、照片、备注，信息最完整',
+  },
+  {
+    label: '就医版',
+    value: 'medical',
+    description: '突出异常指标、历年对比、就诊建议，适合携带就医',
+  },
+]
+
+export const REPORT_SECTION_OPTIONS: { label: string; value: ReportSectionKey; description: string }[] = [
+  { label: '体检照片', value: 'photos', description: '包含体检单原始照片' },
+  { label: '指标表格', value: 'indicators', description: '各系统详细指标数据' },
+  { label: '趋势图', value: 'trends', description: '关键指标历史趋势图' },
+  { label: '生活方式数据', value: 'lifestyle', description: '运动、饮食、睡眠等生活记录' },
+  { label: '风险评估', value: 'risk', description: '疾病风险评估结果' },
+  { label: '对比变化', value: 'comparison', description: '与上次体检对比变化' },
+  { label: '健康建议', value: 'suggestions', description: '个性化健康建议' },
+]
