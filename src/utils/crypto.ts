@@ -74,3 +74,26 @@ export function loadCachedIndicators<T>(): T | null {
     return null
   }
 }
+
+export function saveEncryptedData(key: string, data: unknown, password: string): void {
+  const json = JSON.stringify(data)
+  const encrypted = encryptData(json, password)
+  try {
+    localStorage.setItem(key, encrypted)
+  } catch (e) {
+    console.error('保存加密数据失败:', e)
+    throw new Error('存储容量不足')
+  }
+}
+
+export function loadEncryptedData<T>(key: string, password: string): T | null {
+  const encrypted = localStorage.getItem(key)
+  if (!encrypted) return null
+  const decrypted = decryptData(encrypted, password)
+  if (!decrypted) return null
+  try {
+    return JSON.parse(decrypted) as T
+  } catch {
+    return null
+  }
+}

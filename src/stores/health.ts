@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { IndicatorItem, ExamRecord, PhotoRecord } from '@/types'
 import { fetchIndicators, fetchRecords, saveRecords, deleteRecord, isAbnormalValue } from '@/api/mock'
 import { hasPassword, setPassword, verifyPassword, cacheIndicators, loadCachedIndicators } from '@/utils/crypto'
+import { useLifestyleStore } from '@/stores/lifestyle'
 
 export const useHealthStore = defineStore('health', () => {
   const indicators = ref<IndicatorItem[]>([])
@@ -64,6 +65,8 @@ export const useHealthStore = defineStore('health', () => {
       isAuthenticated.value = true
       await initIndicators()
       await loadAllRecords(pwd)
+      const lifestyleStore = useLifestyleStore()
+      await lifestyleStore.loadRecords(pwd)
       return true
     }
     if (verifyPassword(pwd)) {
@@ -71,6 +74,8 @@ export const useHealthStore = defineStore('health', () => {
       isAuthenticated.value = true
       await initIndicators()
       await loadAllRecords(pwd)
+      const lifestyleStore = useLifestyleStore()
+      await lifestyleStore.loadRecords(pwd)
       return true
     }
     return false

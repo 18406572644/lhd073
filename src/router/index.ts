@@ -6,6 +6,7 @@ import SearchPage from '@/pages/SearchPage.vue'
 import OcrPage from '@/pages/OcrPage.vue'
 import RiskAssessmentPage from '@/pages/RiskAssessmentPage.vue'
 import FamilyHealthPage from '@/pages/FamilyHealthPage.vue'
+import LifestylePage from '@/pages/LifestylePage.vue'
 
 const routes = [
   {
@@ -17,6 +18,21 @@ const routes = [
     path: '/risk',
     name: 'risk',
     component: RiskAssessmentPage,
+  },
+  {
+    path: '/family',
+    name: 'family',
+    component: FamilyHealthPage,
+  },
+  {
+    path: '/lifestyle',
+    name: 'lifestyle',
+    component: LifestylePage,
+  },
+  {
+    path: '/ocr',
+    name: 'ocr',
+    component: OcrPage,
   },
   {
     path: '/archives',
@@ -32,16 +48,6 @@ const routes = [
     path: '/search',
     name: 'search',
     component: SearchPage,
-  },
-  {
-    path: '/ocr',
-    name: 'ocr',
-    component: OcrPage,
-  },
-  {
-    path: '/family',
-    name: 'family',
-    component: FamilyHealthPage,
   },
 ]
 

@@ -1,4 +1,4 @@
-import type { IndicatorItem, ExamRecord, ApiResponse } from '@/types'
+import type { IndicatorItem, ExamRecord, ApiResponse, LifestyleRecords, ExerciseRecord, DietRecord, SleepRecord, VitalSignRecord } from '@/types'
 
 const INDICATOR_LIST: IndicatorItem[] = [
   { id: 'wbc', name: '白细胞', category: '血常规', unit: '10^9/L', normalRange: { min: 3.5, max: 9.5 }, description: '白细胞计数，反映免疫状态' },
@@ -64,4 +64,142 @@ export function getAbnormalDirection(indicator: IndicatorItem, value: number): '
   if (value > indicator.normalRange.max) return 'high'
   if (value < indicator.normalRange.min) return 'low'
   return 'normal'
+}
+
+const LIFESTYLE_STORAGE_KEY = 'health_lifestyle_records'
+
+async function loadLifestyleRecords(password: string): Promise<LifestyleRecords | null> {
+  try {
+    const { loadEncryptedData } = await import('@/utils/crypto')
+    return loadEncryptedData<LifestyleRecords>(LIFESTYLE_STORAGE_KEY, password)
+  } catch (e) {
+    console.error('Failed to load lifestyle records:', e)
+    return null
+  }
+}
+
+async function saveLifestyleRecords(records: LifestyleRecords, password: string): Promise<void> {
+  try {
+    const { saveEncryptedData } = await import('@/utils/crypto')
+    saveEncryptedData(LIFESTYLE_STORAGE_KEY, records, password)
+  } catch (e) {
+    console.error('Failed to save lifestyle records:', e)
+  }
+}
+
+function getDefaultLifestyleRecords(): LifestyleRecords {
+  return {
+    exercises: [],
+    diets: [],
+    sleeps: [],
+    vitalSigns: [],
+  }
+}
+
+export async function fetchLifestyleRecords(password: string): Promise<ApiResponse<LifestyleRecords>> {
+  await delay(200)
+  const records = await loadLifestyleRecords(password)
+  return { code: 0, data: records || getDefaultLifestyleRecords() }
+}
+
+export async function saveLifestyleData(records: LifestyleRecords, password: string): Promise<ApiResponse<{ success: boolean }>> {
+  await delay(200)
+  await saveLifestyleRecords(records, password)
+  return { code: 0, data: { success: true } }
+}
+
+export async function addExerciseRecord(record: ExerciseRecord, records: LifestyleRecords, password: string): Promise<ApiResponse<LifestyleRecords>> {
+  await delay(200)
+  records.exercises.push(record)
+  await saveLifestyleRecords(records, password)
+  return { code: 0, data: records }
+}
+
+export async function updateExerciseRecord(record: ExerciseRecord, records: LifestyleRecords, password: string): Promise<ApiResponse<LifestyleRecords>> {
+  await delay(200)
+  const idx = records.exercises.findIndex(r => r.id === record.id)
+  if (idx >= 0) {
+    records.exercises[idx] = record
+  }
+  await saveLifestyleRecords(records, password)
+  return { code: 0, data: records }
+}
+
+export async function deleteExerciseRecord(id: string, records: LifestyleRecords, password: string): Promise<ApiResponse<LifestyleRecords>> {
+  await delay(200)
+  records.exercises = records.exercises.filter(r => r.id !== id)
+  await saveLifestyleRecords(records, password)
+  return { code: 0, data: records }
+}
+
+export async function addDietRecord(record: DietRecord, records: LifestyleRecords, password: string): Promise<ApiResponse<LifestyleRecords>> {
+  await delay(200)
+  records.diets.push(record)
+  await saveLifestyleRecords(records, password)
+  return { code: 0, data: records }
+}
+
+export async function updateDietRecord(record: DietRecord, records: LifestyleRecords, password: string): Promise<ApiResponse<LifestyleRecords>> {
+  await delay(200)
+  const idx = records.diets.findIndex(r => r.id === record.id)
+  if (idx >= 0) {
+    records.diets[idx] = record
+  }
+  await saveLifestyleRecords(records, password)
+  return { code: 0, data: records }
+}
+
+export async function deleteDietRecord(id: string, records: LifestyleRecords, password: string): Promise<ApiResponse<LifestyleRecords>> {
+  await delay(200)
+  records.diets = records.diets.filter(r => r.id !== id)
+  await saveLifestyleRecords(records, password)
+  return { code: 0, data: records }
+}
+
+export async function addSleepRecord(record: SleepRecord, records: LifestyleRecords, password: string): Promise<ApiResponse<LifestyleRecords>> {
+  await delay(200)
+  records.sleeps.push(record)
+  await saveLifestyleRecords(records, password)
+  return { code: 0, data: records }
+}
+
+export async function updateSleepRecord(record: SleepRecord, records: LifestyleRecords, password: string): Promise<ApiResponse<LifestyleRecords>> {
+  await delay(200)
+  const idx = records.sleeps.findIndex(r => r.id === record.id)
+  if (idx >= 0) {
+    records.sleeps[idx] = record
+  }
+  await saveLifestyleRecords(records, password)
+  return { code: 0, data: records }
+}
+
+export async function deleteSleepRecord(id: string, records: LifestyleRecords, password: string): Promise<ApiResponse<LifestyleRecords>> {
+  await delay(200)
+  records.sleeps = records.sleeps.filter(r => r.id !== id)
+  await saveLifestyleRecords(records, password)
+  return { code: 0, data: records }
+}
+
+export async function addVitalSignRecord(record: VitalSignRecord, records: LifestyleRecords, password: string): Promise<ApiResponse<LifestyleRecords>> {
+  await delay(200)
+  records.vitalSigns.push(record)
+  await saveLifestyleRecords(records, password)
+  return { code: 0, data: records }
+}
+
+export async function updateVitalSignRecord(record: VitalSignRecord, records: LifestyleRecords, password: string): Promise<ApiResponse<LifestyleRecords>> {
+  await delay(200)
+  const idx = records.vitalSigns.findIndex(r => r.id === record.id)
+  if (idx >= 0) {
+    records.vitalSigns[idx] = record
+  }
+  await saveLifestyleRecords(records, password)
+  return { code: 0, data: records }
+}
+
+export async function deleteVitalSignRecord(id: string, records: LifestyleRecords, password: string): Promise<ApiResponse<LifestyleRecords>> {
+  await delay(200)
+  records.vitalSigns = records.vitalSigns.filter(r => r.id !== id)
+  await saveLifestyleRecords(records, password)
+  return { code: 0, data: records }
 }

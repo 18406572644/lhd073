@@ -196,3 +196,117 @@ export const SEVERITY_LABELS: Record<string, string> = {
   moderate: '中度',
   severe: '重度',
 }
+
+export type ExerciseType = 'running' | 'walking' | 'cycling' | 'swimming' | 'yoga' | 'strength' | 'hiit' | 'other'
+
+export const EXERCISE_TYPE_LABELS: Record<ExerciseType, string> = {
+  running: '跑步',
+  walking: '步行',
+  cycling: '骑行',
+  swimming: '游泳',
+  yoga: '瑜伽',
+  strength: '力量训练',
+  hiit: 'HIIT',
+  other: '其他',
+}
+
+export interface ExerciseRecord {
+  id: string
+  date: string
+  type: ExerciseType
+  duration: number
+  calories: number
+  feeling: 'great' | 'good' | 'normal' | 'tired' | 'sore'
+  notes: string
+}
+
+export const EXERCISE_FEELING_LABELS: Record<string, string> = {
+  great: '非常棒',
+  good: '还不错',
+  normal: '一般',
+  tired: '有点累',
+  sore: '肌肉酸痛',
+}
+
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
+
+export const MEAL_TYPE_LABELS: Record<MealType, string> = {
+  breakfast: '早餐',
+  lunch: '午餐',
+  dinner: '晚餐',
+  snack: '加餐',
+}
+
+export type DietHealthLevel = 'healthy' | 'moderate' | 'unhealthy'
+
+export const DIET_HEALTH_LABELS: Record<DietHealthLevel, string> = {
+  healthy: '健康',
+  moderate: '一般',
+  unhealthy: '不健康',
+}
+
+export interface DietRecord {
+  id: string
+  date: string
+  mealType: MealType
+  foodItems: string
+  healthLevel: DietHealthLevel
+  calories?: number
+  notes: string
+}
+
+export type SleepQuality = 'excellent' | 'good' | 'fair' | 'poor' | 'very_poor'
+
+export const SLEEP_QUALITY_LABELS: Record<SleepQuality, string> = {
+  excellent: '非常好',
+  good: '良好',
+  fair: '一般',
+  poor: '较差',
+  very_poor: '很差',
+}
+
+export interface SleepRecord {
+  id: string
+  date: string
+  duration: number
+  quality: SleepQuality
+  bedTime?: string
+  wakeTime?: string
+  notes: string
+}
+
+export type VitalSignType = 'weight' | 'blood_pressure' | 'heart_rate' | 'blood_sugar' | 'bmi' | 'body_fat'
+
+export const VITAL_SIGN_TYPE_LABELS: Record<VitalSignType, string> = {
+  weight: '体重',
+  blood_pressure: '血压',
+  heart_rate: '心率',
+  blood_sugar: '血糖',
+  bmi: 'BMI',
+  body_fat: '体脂率',
+}
+
+export const VITAL_SIGN_UNITS: Record<VitalSignType, string> = {
+  weight: 'kg',
+  blood_pressure: 'mmHg',
+  heart_rate: '次/分',
+  blood_sugar: 'mmol/L',
+  bmi: 'kg/m²',
+  body_fat: '%',
+}
+
+export interface VitalSignRecord {
+  id: string
+  date: string
+  type: VitalSignType
+  value: number
+  value2?: number
+  notes: string
+}
+
+export interface LifestyleRecords {
+  exercises: ExerciseRecord[]
+  diets: DietRecord[]
+  sleeps: SleepRecord[]
+  vitalSigns: VitalSignRecord[]
+}
