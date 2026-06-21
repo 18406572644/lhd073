@@ -2,7 +2,7 @@
 import { ref, computed, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NConfigProvider, NMenu, NIcon, NButton, NAvatar, lightTheme } from 'naive-ui'
-import { LayoutDashboard, FolderOpen, TrendingUp, Search, LogOut, Plus } from 'lucide-vue-next'
+import { LayoutDashboard, FolderOpen, TrendingUp, Search, LogOut, Plus, Scan } from 'lucide-vue-next'
 import { useHealthStore } from '@/stores/health'
 
 const router = useRouter()
@@ -28,6 +28,11 @@ const menuOptions = [
     label: '仪表盘',
     key: '/',
     icon: () => h(NIcon, { size: 20 }, { default: () => h(LayoutDashboard) }),
+  },
+  {
+    label: 'OCR 智能识别',
+    key: '/ocr',
+    icon: () => h(NIcon, { size: 20 }, { default: () => h(Scan) }),
   },
   {
     label: '体检档案',

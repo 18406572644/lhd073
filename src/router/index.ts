@@ -3,6 +3,7 @@ import DashboardPage from '@/pages/DashboardPage.vue'
 import ArchivesPage from '@/pages/ArchivesPage.vue'
 import TrendsPage from '@/pages/TrendsPage.vue'
 import SearchPage from '@/pages/SearchPage.vue'
+import OcrPage from '@/pages/OcrPage.vue'
 
 const routes = [
   {
@@ -24,6 +25,11 @@ const routes = [
     path: '/search',
     name: 'search',
     component: SearchPage,
+  },
+  {
+    path: '/ocr',
+    name: 'ocr',
+    component: OcrPage,
   },
 ]
 
