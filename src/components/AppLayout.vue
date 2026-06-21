@@ -2,7 +2,7 @@
 import { ref, computed, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NConfigProvider, NMenu, NIcon, NButton, NAvatar, lightTheme } from 'naive-ui'
-import { LayoutDashboard, FolderOpen, TrendingUp, Search, LogOut, Plus, Scan, ShieldCheck, Dna, HeartPulse, FileText, Share2 } from 'lucide-vue-next'
+import { LayoutDashboard, FolderOpen, TrendingUp, Search, LogOut, Plus, Scan, ShieldCheck, Dna, HeartPulse, FileText, Share2, Monitor } from 'lucide-vue-next'
 import { useHealthStore } from '@/stores/health'
 
 const router = useRouter()
@@ -73,6 +73,11 @@ const menuOptions = [
     label: '分享管理',
     key: '/share-management',
     icon: () => h(NIcon, { size: 20 }, { default: () => h(Share2) }),
+  },
+  {
+    label: '大屏模式',
+    key: '/bigscreen',
+    icon: () => h(NIcon, { size: 20 }, { default: () => h(Monitor) }),
   },
 ]
 

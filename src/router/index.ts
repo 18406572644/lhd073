@@ -8,6 +8,7 @@ import RiskAssessmentPage from '@/pages/RiskAssessmentPage.vue'
 import FamilyHealthPage from '@/pages/FamilyHealthPage.vue'
 import LifestylePage from '@/pages/LifestylePage.vue'
 import ReportPage from '@/pages/ReportPage.vue'
+import BigScreenPage from '@/pages/BigScreenPage.vue'
 import SharePreviewPage from '@/pages/SharePreviewPage.vue'
 import ShareManagementPage from '@/pages/ShareManagementPage.vue'
 
@@ -56,6 +57,12 @@ const mainRoutes = [
     path: '/report',
     name: 'report',
     component: ReportPage,
+  },
+  {
+    path: '/bigscreen',
+    name: 'bigscreen',
+    component: BigScreenPage,
+    meta: { standalone: true },
   },
   {
     path: '/share-management',
