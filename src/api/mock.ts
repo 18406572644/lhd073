@@ -1,4 +1,4 @@
-import type { IndicatorItem, ExamRecord, ApiResponse, LifestyleRecords, ExerciseRecord, DietRecord, SleepRecord, VitalSignRecord, ShareRecord, ShareComment, CreateShareRequest, ShareAccessResult, SHARE_STORAGE_KEY } from '@/types'
+import type { IndicatorItem, ExamRecord, ApiResponse, LifestyleRecords, ExerciseRecord, DietRecord, SleepRecord, VitalSignRecord, ShareRecord, ShareRecordMeta, ShareComment, CreateShareRequest, ShareAccessResult } from '@/types'
 import { hashPassword } from '@/utils/crypto'
 
 const INDICATOR_LIST: IndicatorItem[] = [
@@ -205,7 +205,9 @@ export async function deleteVitalSignRecord(id: string, records: LifestyleRecord
   return { code: 0, data: records }
 }
 
-const SHARE_STORAGE = 'health_share_records'
+const SHARE_META_STORAGE = 'health_share_meta'
+const SHARE_PDF_PREFIX = 'health_share_pdf_'
+const SHARE_COMMENTS_PREFIX = 'health_share_comments_'
 
 function generateShareId(): string {
   return 'share_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9)
@@ -215,157 +217,280 @@ function generateCommentId(): string {
   return 'cmt_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9)
 }
 
-function loadShareRecords(): ShareRecord[] {
+function getStorageUsedSize(): number {
+  let total = 0
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key) {
+      const value = localStorage.getItem(key)
+      if (value) {
+        total += key.length + value.length
+      }
+    }
+  }
+  return total
+}
+
+function cleanupExpiredShares(): void {
   try {
-    const raw = localStorage.getItem(SHARE_STORAGE)
+    const raw = localStorage.getItem(SHARE_META_STORAGE)
+    if (!raw) return
+    const metas: ShareRecordMeta[] = JSON.parse(raw)
+    const now = new Date()
+    const toRemove: string[] = []
+
+    const validMetas = metas.filter(meta => {
+      const isExpired = meta.expiresAt && new Date(meta.expiresAt) < now
+      const isRevoked = meta.isRevoked
+      if (isExpired || isRevoked) {
+        toRemove.push(meta.id)
+        return false
+      }
+      return true
+    })
+
+    toRemove.forEach(id => {
+      localStorage.removeItem(SHARE_PDF_PREFIX + id)
+      localStorage.removeItem(SHARE_COMMENTS_PREFIX + id)
+    })
+
+    if (toRemove.length > 0) {
+      localStorage.setItem(SHARE_META_STORAGE, JSON.stringify(validMetas))
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function loadShareMetas(): ShareRecordMeta[] {
+  try {
+    const raw = localStorage.getItem(SHARE_META_STORAGE)
     if (!raw) return []
-    return JSON.parse(raw) as ShareRecord[]
+    return JSON.parse(raw) as ShareRecordMeta[]
   } catch {
     return []
   }
 }
 
-function saveShareRecords(records: ShareRecord[]): void {
-  localStorage.setItem(SHARE_STORAGE, JSON.stringify(records))
+function saveShareMetas(metas: ShareRecordMeta[]): void {
+  localStorage.setItem(SHARE_META_STORAGE, JSON.stringify(metas))
+}
+
+function loadSharePdf(shareId: string): string {
+  try {
+    return localStorage.getItem(SHARE_PDF_PREFIX + shareId) || ''
+  } catch {
+    return ''
+  }
+}
+
+function saveSharePdf(shareId: string, pdfDataUrl: string): boolean {
+  try {
+    const estimatedSize = (SHARE_PDF_PREFIX + shareId).length + pdfDataUrl.length
+    const currentUsage = getStorageUsedSize()
+    const totalQuota = 5 * 1024 * 1024
+
+    if (currentUsage + estimatedSize > totalQuota * 0.9) {
+      cleanupExpiredShares()
+      const newUsage = getStorageUsedSize()
+      if (newUsage + estimatedSize > totalQuota * 0.95) {
+        return false
+      }
+    }
+
+    localStorage.setItem(SHARE_PDF_PREFIX + shareId, pdfDataUrl)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function loadShareComments(shareId: string): ShareComment[] {
+  try {
+    const raw = localStorage.getItem(SHARE_COMMENTS_PREFIX + shareId)
+    if (!raw) return []
+    return JSON.parse(raw) as ShareComment[]
+  } catch {
+    return []
+  }
+}
+
+function saveShareComments(shareId: string, comments: ShareComment[]): void {
+  try {
+    localStorage.setItem(SHARE_COMMENTS_PREFIX + shareId, JSON.stringify(comments))
+  } catch {
+    // ignore
+  }
+}
+
+function deleteShareData(shareId: string): void {
+  localStorage.removeItem(SHARE_PDF_PREFIX + shareId)
+  localStorage.removeItem(SHARE_COMMENTS_PREFIX + shareId)
+}
+
+function buildShareRecord(meta: ShareRecordMeta, pdfDataUrl: string, comments: ShareComment[]): ShareRecord {
+  return {
+    ...meta,
+    pdfDataUrl,
+    comments,
+  }
 }
 
 export async function createShare(request: CreateShareRequest): Promise<ApiResponse<{ shareId: string; shareUrl: string }>> {
   await delay(300)
-  
+
+  cleanupExpiredShares()
+
   const shareId = generateShareId()
   const now = new Date()
   let expiresAt: string | null = null
-  
+
   if (request.expireDays && request.expireDays > 0) {
     const expireDate = new Date(now.getTime() + request.expireDays * 24 * 60 * 60 * 1000)
     expiresAt = expireDate.toISOString()
   }
-  
-  const shareRecord: ShareRecord = {
+
+  const meta: ShareRecordMeta = {
     id: shareId,
     reportTitle: request.reportTitle,
-    pdfDataUrl: request.pdfDataUrl,
     passwordHash: hashPassword(request.accessPassword),
     accessPassword: request.accessPassword,
     createdAt: now.toISOString(),
     expiresAt,
     isRevoked: false,
     viewCount: 0,
-    comments: [],
+    commentCount: 0,
     createdBy: 'current_user',
     allowComments: request.allowComments,
   }
-  
-  const records = loadShareRecords()
-  records.push(shareRecord)
-  saveShareRecords(records)
-  
+
+  const pdfSaved = saveSharePdf(shareId, request.pdfDataUrl)
+  if (!pdfSaved) {
+    return { code: 507, message: '存储空间不足，请先清理过期或已撤销的分享记录', data: {} as { shareId: string; shareUrl: string } }
+  }
+
+  try {
+    const metas = loadShareMetas()
+    metas.unshift(meta)
+    saveShareMetas(metas)
+    saveShareComments(shareId, [])
+  } catch {
+    deleteShareData(shareId)
+    return { code: 507, message: '存储空间不足，无法创建分享', data: {} as { shareId: string; shareUrl: string } }
+  }
+
   const shareUrl = `${window.location.origin}${window.location.pathname}#/share/${shareId}`
-  
+
   return { code: 0, data: { shareId, shareUrl } }
 }
 
 export async function verifyShareAccess(shareId: string, password: string): Promise<ShareAccessResult> {
   await delay(200)
-  
-  const records = loadShareRecords()
-  const share = records.find(r => r.id === shareId)
-  
-  if (!share) {
+
+  const metas = loadShareMetas()
+  const meta = metas.find(r => r.id === shareId)
+
+  if (!meta) {
     return { success: false, error: '分享链接不存在或已过期' }
   }
-  
-  if (share.isRevoked) {
+
+  if (meta.isRevoked) {
     return { success: false, error: '该分享已被撤销' }
   }
-  
-  if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+
+  if (meta.expiresAt && new Date(meta.expiresAt) < new Date()) {
     return { success: false, error: '分享链接已过期' }
   }
-  
-  if (hashPassword(password) !== share.passwordHash) {
+
+  if (hashPassword(password) !== meta.passwordHash) {
     return { success: false, error: '访问密码错误' }
   }
-  
-  share.viewCount++
-  saveShareRecords(records)
-  
-  const { pdfDataUrl, passwordHash, accessPassword, ...safeShare } = share
-  
-  return { success: true, share: share }
+
+  meta.viewCount++
+  saveShareMetas(metas)
+
+  const pdfDataUrl = loadSharePdf(shareId)
+  const comments = loadShareComments(shareId)
+  const share = buildShareRecord(meta, pdfDataUrl, comments)
+
+  return { success: true, share }
 }
 
 export async function getSharePreview(shareId: string): Promise<ShareAccessResult> {
   await delay(100)
-  
-  const records = loadShareRecords()
-  const share = records.find(r => r.id === shareId)
-  
-  if (!share) {
+
+  const metas = loadShareMetas()
+  const meta = metas.find(r => r.id === shareId)
+
+  if (!meta) {
     return { success: false, error: '分享链接不存在或已过期' }
   }
-  
-  if (share.isRevoked) {
+
+  if (meta.isRevoked) {
     return { success: false, error: '该分享已被撤销' }
   }
-  
-  if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+
+  if (meta.expiresAt && new Date(meta.expiresAt) < new Date()) {
     return { success: false, error: '分享链接已过期' }
   }
-  
-  return { success: true, share: { ...share, pdfDataUrl: '', passwordHash: '', accessPassword: '' } }
+
+  const emptyShare: ShareRecord = {
+    ...meta,
+    pdfDataUrl: '',
+    comments: [],
+  }
+
+  return { success: true, share: emptyShare }
 }
 
-export async function fetchShareList(): Promise<ApiResponse<ShareRecord[]>> {
+export async function fetchShareList(): Promise<ApiResponse<ShareRecordMeta[]>> {
   await delay(200)
-  const records = loadShareRecords()
-  const safeRecords = records.map(r => {
-    const { pdfDataUrl, passwordHash, accessPassword, ...safe } = r
-    return safe
-  }) as ShareRecord[]
-  return { code: 0, data: safeRecords }
+  cleanupExpiredShares()
+  const metas = loadShareMetas()
+  return { code: 0, data: metas }
 }
 
 export async function revokeShare(shareId: string): Promise<ApiResponse<{ success: boolean }>> {
   await delay(200)
-  const records = loadShareRecords()
-  const share = records.find(r => r.id === shareId)
-  
+  const metas = loadShareMetas()
+  const share = metas.find(r => r.id === shareId)
+
   if (!share) {
     return { code: 404, data: { success: false } }
   }
-  
+
   share.isRevoked = true
-  saveShareRecords(records)
-  
+  saveShareMetas(metas)
+
   return { code: 0, data: { success: true } }
 }
 
 export async function deleteShare(shareId: string): Promise<ApiResponse<{ success: boolean }>> {
   await delay(200)
-  const records = loadShareRecords()
-  const filtered = records.filter(r => r.id !== shareId)
-  saveShareRecords(filtered)
+  const metas = loadShareMetas()
+  const filtered = metas.filter(r => r.id !== shareId)
+  saveShareMetas(filtered)
+  deleteShareData(shareId)
   return { code: 0, data: { success: true } }
 }
 
 export async function addShareComment(shareId: string, authorName: string, content: string, pageNumber?: number): Promise<ApiResponse<ShareComment>> {
   await delay(200)
-  const records = loadShareRecords()
-  const share = records.find(r => r.id === shareId)
-  
+  const metas = loadShareMetas()
+  const share = metas.find(r => r.id === shareId)
+
   if (!share) {
     return { code: 404, data: {} as ShareComment }
   }
-  
+
   if (share.isRevoked) {
     return { code: 403, data: {} as ShareComment }
   }
-  
+
   if (!share.allowComments) {
     return { code: 403, data: {} as ShareComment }
   }
-  
+
   const comment: ShareComment = {
     id: generateCommentId(),
     shareId,
@@ -374,21 +499,19 @@ export async function addShareComment(shareId: string, authorName: string, conte
     createdAt: new Date().toISOString(),
     pageNumber,
   }
-  
-  share.comments.push(comment)
-  saveShareRecords(records)
-  
+
+  const comments = loadShareComments(shareId)
+  comments.push(comment)
+  saveShareComments(shareId, comments)
+
+  share.commentCount = comments.length
+  saveShareMetas(metas)
+
   return { code: 0, data: comment }
 }
 
 export async function fetchShareComments(shareId: string): Promise<ApiResponse<ShareComment[]>> {
   await delay(100)
-  const records = loadShareRecords()
-  const share = records.find(r => r.id === shareId)
-  
-  if (!share) {
-    return { code: 404, data: [] }
-  }
-  
-  return { code: 0, data: [...share.comments] }
+  const comments = loadShareComments(shareId)
+  return { code: 0, data: [...comments] }
 }

@@ -23,13 +23,13 @@ import {
   RefreshCw,
 } from 'lucide-vue-next'
 import { fetchShareList, revokeShare, deleteShare } from '@/api/mock'
-import type { ShareRecord } from '@/types'
+import type { ShareRecordMeta } from '@/types'
 
 const message = useMessage()
 const dialog = useDialog()
 
 const isLoading = ref(false)
-const shareList = ref<ShareRecord[]>([])
+const shareList = ref<ShareRecordMeta[]>([])
 
 function formatDate(isoStr: string): string {
   const d = new Date(isoStr)
@@ -52,7 +52,7 @@ async function loadShareList() {
   }
 }
 
-async function handleRevoke(share: ShareRecord) {
+async function handleRevoke(share: ShareRecordMeta) {
   try {
     const result = await revokeShare(share.id)
     if (result.code === 0) {
@@ -66,7 +66,7 @@ async function handleRevoke(share: ShareRecord) {
   }
 }
 
-async function handleDelete(share: ShareRecord) {
+async function handleDelete(share: ShareRecordMeta) {
   dialog.warning({
     title: '确认删除',
     content: `确定要删除这条分享记录吗？删除后无法恢复。`,
@@ -88,7 +88,7 @@ async function handleDelete(share: ShareRecord) {
   })
 }
 
-function copyShareLink(share: ShareRecord) {
+function copyShareLink(share: ShareRecordMeta) {
   const shareUrl = `${window.location.origin}${window.location.pathname}#/share/${share.id}`
   navigator.clipboard.writeText(shareUrl).then(() => {
     message.success('分享链接已复制到剪贴板')
@@ -103,12 +103,12 @@ function copyShareLink(share: ShareRecord) {
   })
 }
 
-function openShareLink(share: ShareRecord) {
+function openShareLink(share: ShareRecordMeta) {
   const shareUrl = `${window.location.origin}${window.location.pathname}#/share/${share.id}`
   window.open(shareUrl, '_blank')
 }
 
-function getStatusInfo(share: ShareRecord) {
+function getStatusInfo(share: ShareRecordMeta) {
   if (share.isRevoked) {
     return { type: 'default' as const, text: '已撤销' }
   }
@@ -118,7 +118,7 @@ function getStatusInfo(share: ShareRecord) {
   return { type: 'success' as const, text: '有效' }
 }
 
-const columns = computed<DataTableColumns<ShareRecord>>(() => [
+const columns = computed<DataTableColumns<ShareRecordMeta>>(() => [
   {
     title: '报告标题',
     key: 'reportTitle',
@@ -169,9 +169,9 @@ const columns = computed<DataTableColumns<ShareRecord>>(() => [
   },
   {
     title: '评论数',
-    key: 'comments',
+    key: 'commentCount',
     width: 100,
-    render: (row) => h('span', { style: { color: '#666' } }, `${row.comments.length} 条`),
+    render: (row) => h('span', { style: { color: '#666' } }, `${row.commentCount} 条`),
   },
   {
     title: '操作',
@@ -236,7 +236,7 @@ const statistics = computed(() => {
     !s.isRevoked && s.expiresAt && new Date(s.expiresAt) < new Date()
   ).length
   const totalViews = shareList.value.reduce((sum, s) => sum + s.viewCount, 0)
-  const totalComments = shareList.value.reduce((sum, s) => sum + s.comments.length, 0)
+  const totalComments = shareList.value.reduce((sum, s) => sum + s.commentCount, 0)
 
   return { total, active, revoked, expired, totalViews, totalComments }
 })

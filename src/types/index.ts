@@ -33,6 +33,7 @@ export interface ExamRecord {
 export interface ApiResponse<T> {
   code: number
   data: T
+  message?: string
 }
 
 export interface OcrIndicatorResult {
@@ -427,6 +428,20 @@ export interface ShareRecord {
   allowComments: boolean
 }
 
+export interface ShareRecordMeta {
+  id: string
+  reportTitle: string
+  passwordHash: string
+  accessPassword: string
+  createdAt: string
+  expiresAt: string | null
+  isRevoked: boolean
+  viewCount: number
+  commentCount: number
+  createdBy: string
+  allowComments: boolean
+}
+
 export interface CreateShareRequest {
   reportTitle: string
   pdfDataUrl: string
@@ -441,4 +456,6 @@ export interface ShareAccessResult {
   error?: string
 }
 
-export const SHARE_STORAGE_KEY = 'health_share_records'
+export const SHARE_META_STORAGE_KEY = 'health_share_meta'
+export const SHARE_PDF_STORAGE_PREFIX = 'health_share_pdf_'
+export const SHARE_COMMENTS_STORAGE_PREFIX = 'health_share_comments_'

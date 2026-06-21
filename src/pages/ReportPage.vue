@@ -199,7 +199,7 @@ async function handleCreateShare() {
       showShareResult.value = true
       message.success('分享链接创建成功')
     } else {
-      message.error('创建分享失败')
+      message.error(result.message || '创建分享失败')
     }
   } catch (e) {
     console.error(e)
@@ -1284,8 +1284,8 @@ onMounted(() => {
       @positive-click="handleCreateShare"
       @negative-click="closeShareModal"
     >
-      <div v-if="!showShareResult">
-        <NAlert type="info" show-icon style="margin-bottom: 20px;">
+      <div v-if="!showShareResult" style="width: 100%; box-sizing: border-box;">
+        <NAlert type="info" show-icon style="margin-bottom: 20px; width: 100%; box-sizing: border-box;">
           <template #icon>
             <NIcon><ShieldCheck /></NIcon>
           </template>
@@ -1294,23 +1294,24 @@ onMounted(() => {
           </div>
         </NAlert>
 
-        <NForm label-placement="left" label-width="100px">
-          <NFormItem label="报告标题">
+        <NForm label-placement="left" label-width="100px" style="width: 100%;">
+          <NFormItem label="报告标题" label-placement="left">
             <NInput
               :value="generatedReport?.basicInfo.reportTitle"
               disabled
               clearable
+              style="width: 100%;"
             />
           </NFormItem>
 
-          <NFormItem label="访问密码" required>
-            <div style="display: flex; gap: 8px; align-items: center;">
+          <NFormItem label="访问密码" required label-placement="left">
+            <div style="display: flex; gap: 8px; align-items: center; width: 100%; min-width: 0;">
               <NInput
                 v-model:value="shareAccessPassword"
                 placeholder="设置访问密码"
                 maxlength="16"
                 show-password-on="click"
-                style="flex: 1;"
+                style="flex: 1; min-width: 0;"
               />
               <NButton @click="shareAccessPassword = generateRandomPassword()">
                 <template #icon>
@@ -1319,12 +1320,12 @@ onMounted(() => {
                 随机
               </NButton>
             </div>
-            <div style="font-size: 12px; color: #999; margin-top: 4px;">
+            <div style="font-size: 12px; color: #999; margin-top: 4px; word-break: break-all;">
               密码长度 6-16 位，建议包含字母和数字
             </div>
           </NFormItem>
 
-          <NFormItem label="有效期">
+          <NFormItem label="有效期" label-placement="left">
             <NSelect
               v-model:value="shareExpireDays"
               :options="[
@@ -1334,10 +1335,11 @@ onMounted(() => {
                 { label: '永久有效', value: null },
               ]"
               placeholder="选择有效期"
+              style="width: 100%;"
             />
           </NFormItem>
 
-          <NFormItem label="允许评论">
+          <NFormItem label="允许评论" label-placement="left">
             <NSwitch v-model:value="shareAllowComments" />
             <span style="font-size: 13px; color: #666; margin-left: 8px;">
               开启后，查看者可在线添加评论
@@ -1345,7 +1347,7 @@ onMounted(() => {
           </NFormItem>
         </NForm>
 
-        <NAlert type="warning" show-icon style="margin-top: 16px;">
+        <NAlert type="warning" show-icon style="margin-top: 16px; width: 100%; box-sizing: border-box;">
           <template #icon>
             <NIcon><Eye /></NIcon>
           </template>
@@ -1355,8 +1357,8 @@ onMounted(() => {
         </NAlert>
       </div>
 
-      <div v-else>
-        <div style="text-align: center; padding: 20px 0;">
+      <div v-else style="width: 100%; box-sizing: border-box;">
+        <div style="text-align: center; padding: 20px 0; width: 100%; box-sizing: border-box;">
           <div style="width: 64px; height: 64px; margin: 0 auto 16px; background: #f0f9eb; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
             <NIcon :size="32" color="#67C23A"><Link /></NIcon>
           </div>
@@ -1364,11 +1366,11 @@ onMounted(() => {
           <p style="margin: 0; color: #888; font-size: 14px;">请将以下信息发送给接收方</p>
         </div>
 
-        <NCard :bordered="false" style="background: #fafcff; margin-bottom: 16px;">
-          <NDescriptions :column="1" bordered size="small">
+        <NCard :bordered="false" style="background: #fafcff; margin-bottom: 16px; width: 100%; box-sizing: border-box;">
+          <NDescriptions :column="1" bordered size="small" style="width: 100%;">
             <NDescriptionsItem label="分享链接">
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <span style="flex: 1; word-break: break-all; font-family: monospace; font-size: 12px;">{{ createdShareUrl }}</span>
+              <div style="display: flex; gap: 8px; align-items: center; width: 100%; min-width: 0;">
+                <span style="flex: 1; word-break: break-all; font-family: monospace; font-size: 12px; min-width: 0; overflow: hidden;">{{ createdShareUrl }}</span>
                 <NButton size="small" type="primary" @click="copyShareUrl">
                   <template #icon>
                     <NIcon><Copy /></NIcon>
@@ -1378,7 +1380,7 @@ onMounted(() => {
               </div>
             </NDescriptionsItem>
             <NDescriptionsItem label="访问密码">
-              <div style="display: flex; gap: 8px; align-items: center;">
+              <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
                 <span style="font-family: monospace; font-size: 16px; font-weight: 600; color: #4A90D9; letter-spacing: 2px;">{{ createdSharePassword }}</span>
                 <NButton size="small" @click="copySharePassword">
                   <template #icon>
@@ -1409,7 +1411,7 @@ onMounted(() => {
           </NDescriptions>
         </NCard>
 
-        <NAlert type="warning" show-icon>
+        <NAlert type="warning" show-icon style="width: 100%; box-sizing: border-box;">
           <template #icon>
             <NIcon><AlertTriangle /></NIcon>
           </template>
