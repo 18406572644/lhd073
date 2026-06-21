@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NConfigProvider, NMessageProvider } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NDialogProvider, NLoadingBarProvider } from 'naive-ui'
 import { useHealthStore } from '@/stores/health'
 import LoginPage from '@/components/LoginPage.vue'
 import AppLayout from '@/components/AppLayout.vue'
@@ -19,8 +19,12 @@ const themeOverrides = {
 <template>
   <NConfigProvider :theme-overrides="themeOverrides">
     <NMessageProvider>
-      <LoginPage v-if="!store.isAuthenticated" />
-      <AppLayout v-else />
+      <NDialogProvider>
+        <NLoadingBarProvider>
+          <LoginPage v-if="!store.isAuthenticated" />
+          <AppLayout v-else />
+        </NLoadingBarProvider>
+      </NDialogProvider>
     </NMessageProvider>
   </NConfigProvider>
 </template>

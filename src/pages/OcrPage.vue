@@ -100,10 +100,19 @@ function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2)
 }
 
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'tif', 'heic', 'heif']
+
+function isImageFile(file: File): boolean {
+  if (file.type && file.type.startsWith('image/')) return true
+  const ext = file.name.split('.').pop()?.toLowerCase()
+  if (ext && IMAGE_EXTENSIONS.includes(ext)) return true
+  return false
+}
+
 function handleUpload({ file }: { file: { file: File } }) {
   const f = file.file
-  if (!f.type.startsWith('image/')) {
-    message.warning(`文件 ${f.name} 不是图片格式`)
+  if (!isImageFile(f)) {
+    message.warning(`文件 ${f.name} 不是图片格式，已自动跳过`)
     return
   }
   const reader = new FileReader()
@@ -114,6 +123,9 @@ function handleUpload({ file }: { file: { file: File } }) {
     if (!selectedPhotoId.value) {
       selectedPhotoId.value = photo.id
     }
+  }
+  reader.onerror = () => {
+    message.error(`文件 ${f.name} 读取失败`)
   }
   reader.readAsDataURL(f)
 }
@@ -457,16 +469,15 @@ watch(selectedPhoto, (newPhoto) => {
           <NUpload
             :custom-request="handleUpload"
             :show-file-list="false"
-            accept="image/*"
             multiple
             directory
             draggable
-            :max="20"
+            :max="100"
           >
             <div style="border: 2px dashed #b3d9f2; border-radius: 8px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.3s;">
               <NIcon size={32} color="#4A90D9" style="margin-bottom: 8px;"><Upload /></NIcon>
               <div style="font-size: 14px; color: #1a6fb5; font-weight: 500;">点击或拖拽上传</div>
-              <div style="font-size: 12px; color: #999; margin-top: 4px;">支持批量上传多张照片</div>
+              <div style="font-size: 12px; color: #999; margin-top: 4px;">支持选择文件夹，自动筛选图片文件</div>
             </div>
           </NUpload>
         </div>
