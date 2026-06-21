@@ -7,6 +7,7 @@ import OcrPage from '@/pages/OcrPage.vue'
 import RiskAssessmentPage from '@/pages/RiskAssessmentPage.vue'
 import FamilyHealthPage from '@/pages/FamilyHealthPage.vue'
 import LifestylePage from '@/pages/LifestylePage.vue'
+import ReportPage from '@/pages/ReportPage.vue'
 
 const routes = [
   {
@@ -48,6 +49,11 @@ const routes = [
     path: '/search',
     name: 'search',
     component: SearchPage,
+  },
+  {
+    path: '/report',
+    name: 'report',
+    component: ReportPage,
   },
 ]
 

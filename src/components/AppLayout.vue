@@ -2,7 +2,7 @@
 import { ref, computed, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NConfigProvider, NMenu, NIcon, NButton, NAvatar, lightTheme } from 'naive-ui'
-import { LayoutDashboard, FolderOpen, TrendingUp, Search, LogOut, Plus, Scan, ShieldCheck, Dna, HeartPulse } from 'lucide-vue-next'
+import { LayoutDashboard, FolderOpen, TrendingUp, Search, LogOut, Plus, Scan, ShieldCheck, Dna, HeartPulse, FileText } from 'lucide-vue-next'
 import { useHealthStore } from '@/stores/health'
 
 const router = useRouter()
@@ -63,6 +63,11 @@ const menuOptions = [
     label: '检索筛选',
     key: '/search',
     icon: () => h(NIcon, { size: 20 }, { default: () => h(Search) }),
+  },
+  {
+    label: '健康报告',
+    key: '/report',
+    icon: () => h(NIcon, { size: 20 }, { default: () => h(FileText) }),
   },
 ]
 
