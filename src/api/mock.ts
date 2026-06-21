@@ -1,4 +1,5 @@
-import type { IndicatorItem, ExamRecord, ApiResponse, LifestyleRecords, ExerciseRecord, DietRecord, SleepRecord, VitalSignRecord } from '@/types'
+import type { IndicatorItem, ExamRecord, ApiResponse, LifestyleRecords, ExerciseRecord, DietRecord, SleepRecord, VitalSignRecord, ShareRecord, ShareComment, CreateShareRequest, ShareAccessResult, SHARE_STORAGE_KEY } from '@/types'
+import { hashPassword } from '@/utils/crypto'
 
 const INDICATOR_LIST: IndicatorItem[] = [
   { id: 'wbc', name: '白细胞', category: '血常规', unit: '10^9/L', normalRange: { min: 3.5, max: 9.5 }, description: '白细胞计数，反映免疫状态' },
@@ -202,4 +203,192 @@ export async function deleteVitalSignRecord(id: string, records: LifestyleRecord
   records.vitalSigns = records.vitalSigns.filter(r => r.id !== id)
   await saveLifestyleRecords(records, password)
   return { code: 0, data: records }
+}
+
+const SHARE_STORAGE = 'health_share_records'
+
+function generateShareId(): string {
+  return 'share_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9)
+}
+
+function generateCommentId(): string {
+  return 'cmt_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9)
+}
+
+function loadShareRecords(): ShareRecord[] {
+  try {
+    const raw = localStorage.getItem(SHARE_STORAGE)
+    if (!raw) return []
+    return JSON.parse(raw) as ShareRecord[]
+  } catch {
+    return []
+  }
+}
+
+function saveShareRecords(records: ShareRecord[]): void {
+  localStorage.setItem(SHARE_STORAGE, JSON.stringify(records))
+}
+
+export async function createShare(request: CreateShareRequest): Promise<ApiResponse<{ shareId: string; shareUrl: string }>> {
+  await delay(300)
+  
+  const shareId = generateShareId()
+  const now = new Date()
+  let expiresAt: string | null = null
+  
+  if (request.expireDays && request.expireDays > 0) {
+    const expireDate = new Date(now.getTime() + request.expireDays * 24 * 60 * 60 * 1000)
+    expiresAt = expireDate.toISOString()
+  }
+  
+  const shareRecord: ShareRecord = {
+    id: shareId,
+    reportTitle: request.reportTitle,
+    pdfDataUrl: request.pdfDataUrl,
+    passwordHash: hashPassword(request.accessPassword),
+    accessPassword: request.accessPassword,
+    createdAt: now.toISOString(),
+    expiresAt,
+    isRevoked: false,
+    viewCount: 0,
+    comments: [],
+    createdBy: 'current_user',
+    allowComments: request.allowComments,
+  }
+  
+  const records = loadShareRecords()
+  records.push(shareRecord)
+  saveShareRecords(records)
+  
+  const shareUrl = `${window.location.origin}${window.location.pathname}#/share/${shareId}`
+  
+  return { code: 0, data: { shareId, shareUrl } }
+}
+
+export async function verifyShareAccess(shareId: string, password: string): Promise<ShareAccessResult> {
+  await delay(200)
+  
+  const records = loadShareRecords()
+  const share = records.find(r => r.id === shareId)
+  
+  if (!share) {
+    return { success: false, error: '分享链接不存在或已过期' }
+  }
+  
+  if (share.isRevoked) {
+    return { success: false, error: '该分享已被撤销' }
+  }
+  
+  if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+    return { success: false, error: '分享链接已过期' }
+  }
+  
+  if (hashPassword(password) !== share.passwordHash) {
+    return { success: false, error: '访问密码错误' }
+  }
+  
+  share.viewCount++
+  saveShareRecords(records)
+  
+  const { pdfDataUrl, passwordHash, accessPassword, ...safeShare } = share
+  
+  return { success: true, share: share }
+}
+
+export async function getSharePreview(shareId: string): Promise<ShareAccessResult> {
+  await delay(100)
+  
+  const records = loadShareRecords()
+  const share = records.find(r => r.id === shareId)
+  
+  if (!share) {
+    return { success: false, error: '分享链接不存在或已过期' }
+  }
+  
+  if (share.isRevoked) {
+    return { success: false, error: '该分享已被撤销' }
+  }
+  
+  if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+    return { success: false, error: '分享链接已过期' }
+  }
+  
+  return { success: true, share: { ...share, pdfDataUrl: '', passwordHash: '', accessPassword: '' } }
+}
+
+export async function fetchShareList(): Promise<ApiResponse<ShareRecord[]>> {
+  await delay(200)
+  const records = loadShareRecords()
+  const safeRecords = records.map(r => {
+    const { pdfDataUrl, passwordHash, accessPassword, ...safe } = r
+    return safe
+  }) as ShareRecord[]
+  return { code: 0, data: safeRecords }
+}
+
+export async function revokeShare(shareId: string): Promise<ApiResponse<{ success: boolean }>> {
+  await delay(200)
+  const records = loadShareRecords()
+  const share = records.find(r => r.id === shareId)
+  
+  if (!share) {
+    return { code: 404, data: { success: false } }
+  }
+  
+  share.isRevoked = true
+  saveShareRecords(records)
+  
+  return { code: 0, data: { success: true } }
+}
+
+export async function deleteShare(shareId: string): Promise<ApiResponse<{ success: boolean }>> {
+  await delay(200)
+  const records = loadShareRecords()
+  const filtered = records.filter(r => r.id !== shareId)
+  saveShareRecords(filtered)
+  return { code: 0, data: { success: true } }
+}
+
+export async function addShareComment(shareId: string, authorName: string, content: string, pageNumber?: number): Promise<ApiResponse<ShareComment>> {
+  await delay(200)
+  const records = loadShareRecords()
+  const share = records.find(r => r.id === shareId)
+  
+  if (!share) {
+    return { code: 404, data: {} as ShareComment }
+  }
+  
+  if (share.isRevoked) {
+    return { code: 403, data: {} as ShareComment }
+  }
+  
+  if (!share.allowComments) {
+    return { code: 403, data: {} as ShareComment }
+  }
+  
+  const comment: ShareComment = {
+    id: generateCommentId(),
+    shareId,
+    authorName: authorName || '匿名用户',
+    content,
+    createdAt: new Date().toISOString(),
+    pageNumber,
+  }
+  
+  share.comments.push(comment)
+  saveShareRecords(records)
+  
+  return { code: 0, data: comment }
+}
+
+export async function fetchShareComments(shareId: string): Promise<ApiResponse<ShareComment[]>> {
+  await delay(100)
+  const records = loadShareRecords()
+  const share = records.find(r => r.id === shareId)
+  
+  if (!share) {
+    return { code: 404, data: [] }
+  }
+  
+  return { code: 0, data: [...share.comments] }
 }

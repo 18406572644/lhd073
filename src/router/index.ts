@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import DashboardPage from '@/pages/DashboardPage.vue'
 import ArchivesPage from '@/pages/ArchivesPage.vue'
 import TrendsPage from '@/pages/TrendsPage.vue'
@@ -8,8 +8,10 @@ import RiskAssessmentPage from '@/pages/RiskAssessmentPage.vue'
 import FamilyHealthPage from '@/pages/FamilyHealthPage.vue'
 import LifestylePage from '@/pages/LifestylePage.vue'
 import ReportPage from '@/pages/ReportPage.vue'
+import SharePreviewPage from '@/pages/SharePreviewPage.vue'
+import ShareManagementPage from '@/pages/ShareManagementPage.vue'
 
-const routes = [
+const mainRoutes = [
   {
     path: '/',
     name: 'dashboard',
@@ -55,10 +57,25 @@ const routes = [
     name: 'report',
     component: ReportPage,
   },
+  {
+    path: '/share-management',
+    name: 'share-management',
+    component: ShareManagementPage,
+  },
+]
+
+const routes = [
+  {
+    path: '/share/:shareId',
+    name: 'share-preview',
+    component: SharePreviewPage,
+    meta: { noAuth: true },
+  },
+  ...mainRoutes,
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes,
 })
 

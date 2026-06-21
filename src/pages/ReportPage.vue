@@ -62,6 +62,13 @@ import {
   Settings,
   Upload,
   X,
+  Share2,
+  Copy,
+  Clock,
+  Eye,
+  ShieldCheck,
+  MessageSquare,
+  Link,
 } from 'lucide-vue-next'
 import { useHealthStore } from '@/stores/health'
 import {
@@ -75,7 +82,8 @@ import {
   type CompareChangeItem,
   type HealthSuggestion,
 } from '@/utils/reportGenerator'
-import { generateHealthReportPdf } from '@/utils/pdf'
+import { generateHealthReportPdf, generateHealthReportPdfDataUrl } from '@/utils/pdf'
+import { createShare } from '@/api/mock'
 import {
   type ReportTemplateType,
   type PdfExportConfig,
@@ -115,6 +123,7 @@ const generatedReport = ref<HealthReport | null>(null)
 const keyTrends = ref<KeyIndicatorTrend[]>([])
 
 const showExportModal = ref(false)
+const showShareModal = ref(false)
 const pdfConfigFormRef = ref<FormInst | null>(null)
 const pdfConfig = ref<PdfExportConfig>({
   template: 'detailed',
@@ -124,6 +133,111 @@ const pdfConfig = ref<PdfExportConfig>({
 })
 const logoPreviewUrl = ref<string | null>(null)
 const activeTab = ref<string>('template')
+
+const shareAccessPassword = ref('')
+const shareExpireDays = ref<number | null>(7)
+const shareAllowComments = ref(true)
+const isCreatingShare = ref(false)
+const createdShareUrl = ref('')
+const createdSharePassword = ref('')
+const showShareResult = ref(false)
+
+function generateRandomPassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  let result = ''
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
+
+function openShareModal() {
+  if (!generatedReport.value) {
+    message.warning('请先生成报告')
+    return
+  }
+  shareAccessPassword.value = generateRandomPassword()
+  shareExpireDays.value = 7
+  shareAllowComments.value = true
+  createdShareUrl.value = ''
+  createdSharePassword.value = ''
+  showShareResult.value = false
+  showShareModal.value = true
+}
+
+function closeShareModal() {
+  showShareModal.value = false
+}
+
+async function handleCreateShare() {
+  if (!shareAccessPassword.value.trim()) {
+    message.warning('请设置访问密码')
+    return
+  }
+
+  isCreatingShare.value = true
+
+  try {
+    const pdfDataUrl = await generateHealthReportPdfDataUrl(
+      generatedReport.value!,
+      keyTrends.value,
+      store.indicators,
+      pdfConfig.value
+    )
+
+    const result = await createShare({
+      reportTitle: generatedReport.value!.basicInfo.reportTitle,
+      pdfDataUrl,
+      accessPassword: shareAccessPassword.value,
+      expireDays: shareExpireDays.value || undefined,
+      allowComments: shareAllowComments.value,
+    })
+
+    if (result.code === 0) {
+      createdShareUrl.value = result.data.shareUrl
+      createdSharePassword.value = shareAccessPassword.value
+      showShareResult.value = true
+      message.success('分享链接创建成功')
+    } else {
+      message.error('创建分享失败')
+    }
+  } catch (e) {
+    console.error(e)
+    message.error('创建分享失败')
+  } finally {
+    isCreatingShare.value = false
+  }
+}
+
+function copyShareUrl() {
+  if (!createdShareUrl.value) return
+  navigator.clipboard.writeText(createdShareUrl.value).then(() => {
+    message.success('分享链接已复制')
+  }).catch(() => {
+    const input = document.createElement('input')
+    input.value = createdShareUrl.value
+    document.body.appendChild(input)
+    input.select()
+    document.execCommand('copy')
+    document.body.removeChild(input)
+    message.success('分享链接已复制')
+  })
+}
+
+function copySharePassword() {
+  if (!createdSharePassword.value) return
+  navigator.clipboard.writeText(createdSharePassword.value).then(() => {
+    message.success('访问密码已复制')
+  }).catch(() => {
+    const input = document.createElement('input')
+    input.value = createdSharePassword.value
+    document.body.appendChild(input)
+    input.select()
+    document.execCommand('copy')
+    document.body.removeChild(input)
+    message.success('访问密码已复制')
+  })
+}
 
 function openExportModal() {
   if (!generatedReport.value) {
@@ -690,6 +804,16 @@ onMounted(() => {
           </template>
           导出 PDF
         </NButton>
+        <NButton
+          type="info"
+          :disabled="!generatedReport"
+          @click="openShareModal"
+        >
+          <template #icon>
+            <NIcon><Share2 /></NIcon>
+          </template>
+          分享报告
+        </NButton>
       </NSpace>
     </div>
 
@@ -1144,6 +1268,165 @@ onMounted(() => {
           </NTabPane>
         </NTabs>
       </div>
+    </NModal>
+
+    <NModal
+      v-model:show="showShareModal"
+      preset="dialog"
+      title="分享报告"
+      :mask-closable="false"
+      :content-style="{ width: '560px', maxWidth: '90vw' }"
+      :body-style="{ padding: '24px' }"
+      positive-text="创建分享"
+      negative-text="取消"
+      :loading="isCreatingShare"
+      :show-icon="false"
+      @positive-click="handleCreateShare"
+      @negative-click="closeShareModal"
+    >
+      <div v-if="!showShareResult">
+        <NAlert type="info" show-icon style="margin-bottom: 20px;">
+          <template #icon>
+            <NIcon><ShieldCheck /></NIcon>
+          </template>
+          <div>
+            <strong>安全提示：</strong>分享链接包含敏感健康信息，请设置安全密码和有效期，并仅分享给授权人员查看。
+          </div>
+        </NAlert>
+
+        <NForm label-placement="left" label-width="100px">
+          <NFormItem label="报告标题">
+            <NInput
+              :value="generatedReport?.basicInfo.reportTitle"
+              disabled
+              clearable
+            />
+          </NFormItem>
+
+          <NFormItem label="访问密码" required>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <NInput
+                v-model:value="shareAccessPassword"
+                placeholder="设置访问密码"
+                maxlength="16"
+                show-password-on="click"
+                style="flex: 1;"
+              />
+              <NButton @click="shareAccessPassword = generateRandomPassword()">
+                <template #icon>
+                  <NIcon><RefreshCw /></NIcon>
+                </template>
+                随机
+              </NButton>
+            </div>
+            <div style="font-size: 12px; color: #999; margin-top: 4px;">
+              密码长度 6-16 位，建议包含字母和数字
+            </div>
+          </NFormItem>
+
+          <NFormItem label="有效期">
+            <NSelect
+              v-model:value="shareExpireDays"
+              :options="[
+                { label: '1 天', value: 1 },
+                { label: '7 天', value: 7 },
+                { label: '30 天', value: 30 },
+                { label: '永久有效', value: null },
+              ]"
+              placeholder="选择有效期"
+            />
+          </NFormItem>
+
+          <NFormItem label="允许评论">
+            <NSwitch v-model:value="shareAllowComments" />
+            <span style="font-size: 13px; color: #666; margin-left: 8px;">
+              开启后，查看者可在线添加评论
+            </span>
+          </NFormItem>
+        </NForm>
+
+        <NAlert type="warning" show-icon style="margin-top: 16px;">
+          <template #icon>
+            <NIcon><Eye /></NIcon>
+          </template>
+          <div>
+            <strong>注意：</strong>接收方需要输入密码才能查看，且报告禁止下载、截图和复制。
+          </div>
+        </NAlert>
+      </div>
+
+      <div v-else>
+        <div style="text-align: center; padding: 20px 0;">
+          <div style="width: 64px; height: 64px; margin: 0 auto 16px; background: #f0f9eb; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+            <NIcon :size="32" color="#67C23A"><Link /></NIcon>
+          </div>
+          <h3 style="margin: 0 0 8px; font-size: 18px; color: #333;">分享链接已创建</h3>
+          <p style="margin: 0; color: #888; font-size: 14px;">请将以下信息发送给接收方</p>
+        </div>
+
+        <NCard :bordered="false" style="background: #fafcff; margin-bottom: 16px;">
+          <NDescriptions :column="1" bordered size="small">
+            <NDescriptionsItem label="分享链接">
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <span style="flex: 1; word-break: break-all; font-family: monospace; font-size: 12px;">{{ createdShareUrl }}</span>
+                <NButton size="small" type="primary" @click="copyShareUrl">
+                  <template #icon>
+                    <NIcon><Copy /></NIcon>
+                  </template>
+                  复制
+                </NButton>
+              </div>
+            </NDescriptionsItem>
+            <NDescriptionsItem label="访问密码">
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <span style="font-family: monospace; font-size: 16px; font-weight: 600; color: #4A90D9; letter-spacing: 2px;">{{ createdSharePassword }}</span>
+                <NButton size="small" @click="copySharePassword">
+                  <template #icon>
+                    <NIcon><Copy /></NIcon>
+                  </template>
+                  复制
+                </NButton>
+              </div>
+            </NDescriptionsItem>
+            <NDescriptionsItem label="有效期">
+              <span v-if="shareExpireDays">
+                <NIcon :size="14" style="margin-right: 4px;"><Clock /></NIcon>
+                {{ shareExpireDays }} 天后过期
+              </span>
+              <span v-else style="color: #67C23A;">
+                <NIcon :size="14" style="margin-right: 4px;"><CheckCircle /></NIcon>
+                永久有效
+              </span>
+            </NDescriptionsItem>
+            <NDescriptionsItem label="评论功能">
+              <NTag :type="shareAllowComments ? 'success' : 'default'" size="small">
+                <template #icon>
+                  <NIcon><MessageSquare /></NIcon>
+                </template>
+                {{ shareAllowComments ? '已开启' : '已关闭' }}
+              </NTag>
+            </NDescriptionsItem>
+          </NDescriptions>
+        </NCard>
+
+        <NAlert type="warning" show-icon>
+          <template #icon>
+            <NIcon><AlertTriangle /></NIcon>
+          </template>
+          <div>
+            <strong>安全提醒：</strong>请勿在公共网络或不安全的渠道发送密码。您可以在「分享管理」页面随时撤销该分享。
+          </div>
+        </NAlert>
+      </div>
+
+      <template #action v-if="showShareResult">
+        <NSpace justify="end">
+          <NButton @click="closeShareModal">关闭</NButton>
+          <NButton type="primary" @click="() => { showShareResult = false; shareAccessPassword = generateRandomPassword(); }">
+            继续创建
+          </NButton>
+        </NSpace>
+      </template>
     </NModal>
   </div>
 </template>

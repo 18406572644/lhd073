@@ -402,3 +402,43 @@ export const REPORT_SECTION_OPTIONS: { label: string; value: ReportSectionKey; d
   { label: '对比变化', value: 'comparison', description: '与上次体检对比变化' },
   { label: '健康建议', value: 'suggestions', description: '个性化健康建议' },
 ]
+
+export interface ShareComment {
+  id: string
+  shareId: string
+  authorName: string
+  content: string
+  createdAt: string
+  pageNumber?: number
+}
+
+export interface ShareRecord {
+  id: string
+  reportTitle: string
+  pdfDataUrl: string
+  passwordHash: string
+  accessPassword: string
+  createdAt: string
+  expiresAt: string | null
+  isRevoked: boolean
+  viewCount: number
+  comments: ShareComment[]
+  createdBy: string
+  allowComments: boolean
+}
+
+export interface CreateShareRequest {
+  reportTitle: string
+  pdfDataUrl: string
+  accessPassword: string
+  expireDays?: number
+  allowComments: boolean
+}
+
+export interface ShareAccessResult {
+  success: boolean
+  share?: ShareRecord
+  error?: string
+}
+
+export const SHARE_STORAGE_KEY = 'health_share_records'

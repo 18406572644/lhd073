@@ -1,10 +1,16 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { NConfigProvider, NMessageProvider, NDialogProvider, NLoadingBarProvider } from 'naive-ui'
 import { useHealthStore } from '@/stores/health'
 import LoginPage from '@/components/LoginPage.vue'
 import AppLayout from '@/components/AppLayout.vue'
+import SharePreviewPage from '@/pages/SharePreviewPage.vue'
 
 const store = useHealthStore()
+const route = useRoute()
+
+const isSharePage = computed(() => route.name === 'share-preview')
 
 const themeOverrides = {
   common: {
@@ -21,7 +27,8 @@ const themeOverrides = {
     <NMessageProvider>
       <NDialogProvider>
         <NLoadingBarProvider>
-          <LoginPage v-if="!store.isAuthenticated" />
+          <SharePreviewPage v-if="isSharePage" />
+          <LoginPage v-else-if="!store.isAuthenticated" />
           <AppLayout v-else />
         </NLoadingBarProvider>
       </NDialogProvider>

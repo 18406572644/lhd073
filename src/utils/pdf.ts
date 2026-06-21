@@ -1321,12 +1321,12 @@ export async function generatePdfArchive(records: ExamRecord[], indicators: Indi
   doc.save(filename)
 }
 
-export async function generateHealthReportPdf(
+async function buildHealthReportPdf(
   report: HealthReport,
   trends: KeyIndicatorTrend[],
   indicators: IndicatorItem[],
   config: PdfExportConfig
-): Promise<void> {
+): Promise<jsPDF> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
   await renderCoverPage(doc, config, report)
@@ -1365,7 +1365,27 @@ export async function generateHealthReportPdf(
 
   applyHeadersFooters(doc, config)
 
+  return doc
+}
+
+export async function generateHealthReportPdf(
+  report: HealthReport,
+  trends: KeyIndicatorTrend[],
+  indicators: IndicatorItem[],
+  config: PdfExportConfig
+): Promise<void> {
+  const doc = await buildHealthReportPdf(report, trends, indicators, config)
   const templateSuffix = config.template === 'simple' ? '简约版' : config.template === 'medical' ? '就医版' : '详细版'
   const filename = `健康分析报告_${templateSuffix}_${todayStamp()}.pdf`
   doc.save(filename)
+}
+
+export async function generateHealthReportPdfDataUrl(
+  report: HealthReport,
+  trends: KeyIndicatorTrend[],
+  indicators: IndicatorItem[],
+  config: PdfExportConfig
+): Promise<string> {
+  const doc = await buildHealthReportPdf(report, trends, indicators, config)
+  return doc.output('datauristring')
 }
