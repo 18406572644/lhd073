@@ -156,11 +156,13 @@ async function handleSubmit() {
   formLoading.value = true
   const dateStr = new Date(formDate.value).toISOString().slice(0, 10)
   const year = new Date(formDate.value).getFullYear()
+  const newRecordId = isEditing.value ? formRecordId.value : generateId()
+  const normalizedPhotos: PhotoRecord[] = formPhotos.value.map(p => ({ ...p, recordId: newRecordId }))
   const record: ExamRecord = {
-    id: isEditing.value ? formRecordId.value : generateId(),
+    id: newRecordId,
     year,
     date: dateStr,
-    photos: formPhotos.value,
+    photos: normalizedPhotos,
     indicators: formIndicators.value,
     notes: formNotes.value,
   }
@@ -175,8 +177,9 @@ async function handleSubmit() {
     showFormModal.value = false
     selectedYear.value = year
     selectedRecordId.value = record.id
-  } catch {
-    message.error('保存失败')
+  } catch (e) {
+    console.error(e)
+    message.error('保存失败，请减少照片数量或重试')
   }
   formLoading.value = false
 }
@@ -191,19 +194,50 @@ async function handleDelete(id: string) {
   }
 }
 
-function handleUpload({ file }: { file: { file: File } }) {
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    const dataUrl = e.target?.result as string
+function compressImage(file: File, maxWidth = 800, quality = 0.7): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const img = new Image()
+      img.onload = () => {
+        let { width, height } = img
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width)
+          width = maxWidth
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve(e.target?.result as string)
+          return
+        }
+        ctx.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      }
+      img.onerror = () => reject(new Error('图片加载失败'))
+      img.src = e.target?.result as string
+    }
+    reader.onerror = () => reject(new Error('图片读取失败'))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function handleUpload({ file }: { file: { file: File; name: string } }) {
+  if (!file || !file.file) return
+  try {
+    const dataUrl = await compressImage(file.file)
     const photo: PhotoRecord = {
       id: generateId(),
-      recordId: formRecordId.value || generateId(),
+      recordId: isEditing.value ? formRecordId.value : 'pending',
       dataUrl,
       fileName: file.file.name,
     }
-    formPhotos.value.push(photo)
+    formPhotos.value = [...formPhotos.value, photo]
+  } catch {
+    message.error('图片上传失败')
   }
-  reader.readAsDataURL(file.file)
 }
 
 function removeFormPhoto(photoId: string) {

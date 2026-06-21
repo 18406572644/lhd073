@@ -41,7 +41,12 @@ export function decryptData(encrypted: string, password: string): string | null 
 export function saveEncryptedRecords(records: unknown, password: string): void {
   const json = JSON.stringify(records)
   const encrypted = encryptData(json, password)
-  localStorage.setItem(STORAGE_KEY_RECORDS, encrypted)
+  try {
+    localStorage.setItem(STORAGE_KEY_RECORDS, encrypted)
+  } catch (e) {
+    console.error('保存加密数据失败，可能超出存储限制:', e)
+    throw new Error('存储容量不足，请删除部分照片后重试')
+  }
 }
 
 export function loadEncryptedRecords<T>(password: string): T | null {

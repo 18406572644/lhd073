@@ -17,7 +17,7 @@ import type { DataTableColumns } from 'naive-ui'
 const store = useHealthStore()
 
 const searchQuery = ref('')
-const yearFilter = ref<number[]>([])
+const yearFilter = ref<string[]>([])
 const categoryFilter = ref<string[]>([])
 const statusFilter = ref<string | null>(null)
 const currentPage = ref(1)
@@ -27,7 +27,13 @@ const sortOrder = ref<'ascend' | 'descend' | false>(false)
 
 const yearOptions = computed(() => {
   const years = Array.from(new Set(store.records.map(r => r.year))).sort((a, b) => b - a)
-  return years.map(y => ({ label: `${y}年`, value: y }))
+  if (years.length === 0) {
+    const currentYear = new Date().getFullYear()
+    const defaults: number[] = []
+    for (let y = currentYear; y >= currentYear - 4; y--) defaults.push(y)
+    return defaults.map(y => ({ label: `${y}年`, value: String(y) }))
+  }
+  return years.map(y => ({ label: `${y}年`, value: String(y) }))
 })
 
 const categoryOptions = computed(() => {
@@ -85,7 +91,8 @@ const filteredRows = computed<TableRow[]>(() => {
   }
 
   if (yearFilter.value.length > 0) {
-    result = result.filter(row => yearFilter.value.includes(row.year))
+    const yearSet = new Set(yearFilter.value.map(y => Number(y)))
+    result = result.filter(row => yearSet.has(row.year))
   }
 
   if (categoryFilter.value.length > 0) {
