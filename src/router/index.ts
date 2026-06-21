@@ -4,12 +4,18 @@ import ArchivesPage from '@/pages/ArchivesPage.vue'
 import TrendsPage from '@/pages/TrendsPage.vue'
 import SearchPage from '@/pages/SearchPage.vue'
 import OcrPage from '@/pages/OcrPage.vue'
+import RiskAssessmentPage from '@/pages/RiskAssessmentPage.vue'
 
 const routes = [
   {
     path: '/',
     name: 'dashboard',
     component: DashboardPage,
+  },
+  {
+    path: '/risk',
+    name: 'risk',
+    component: RiskAssessmentPage,
   },
   {
     path: '/archives',

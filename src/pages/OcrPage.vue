@@ -469,15 +469,15 @@ watch(selectedPhoto, (newPhoto) => {
           <NUpload
             :custom-request="handleUpload"
             :show-file-list="false"
+            accept="image/jpg,image/jpeg,image/png,image/gif,image/bmp,image/webp,image/tiff,image/tif,image/heic,image/heif"
             multiple
-            directory
             draggable
             :max="100"
           >
             <div style="border: 2px dashed #b3d9f2; border-radius: 8px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.3s;">
               <NIcon size={32} color="#4A90D9" style="margin-bottom: 8px;"><Upload /></NIcon>
               <div style="font-size: 14px; color: #1a6fb5; font-weight: 500;">点击或拖拽上传</div>
-              <div style="font-size: 12px; color: #999; margin-top: 4px;">支持选择文件夹，自动筛选图片文件</div>
+              <div style="font-size: 12px; color: #999; margin-top: 4px;">支持多选（Ctrl+A全选文件夹内图片）</div>
             </div>
           </NUpload>
         </div>

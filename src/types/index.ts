@@ -74,3 +74,51 @@ export interface OcrBatchResult {
   lowConfidenceCount: number
   abnormalCount: number
 }
+
+export type RiskLevel = 'low' | 'medium' | 'high'
+
+export interface RiskFactor {
+  name: string
+  value: string | number
+  weight: number
+  description: string
+}
+
+export interface RiskAssessment {
+  id: string
+  name: string
+  description: string
+  icon: string
+  level: RiskLevel
+  score: number
+  probability: number
+  factors: RiskFactor[]
+  suggestions: string[]
+  model: string
+}
+
+export interface LifestyleData {
+  age: number
+  gender: 'male' | 'female'
+  smoking: boolean
+  smokingYears?: number
+  cigarettesPerDay?: number
+  alcohol: 'none' | 'occasional' | 'moderate' | 'heavy'
+  exercise: 'none' | 'rare' | 'weekly' | 'daily'
+  exerciseMinutesPerWeek?: number
+  sleepHours: number
+  stress: 'low' | 'medium' | 'high'
+  familyHistory: {
+    hypertension: boolean
+    diabetes: boolean
+    cardiovascular: boolean
+    fattyLiver: boolean
+    hyperlipidemia: boolean
+  }
+  diet: 'healthy' | 'moderate' | 'unhealthy'
+}
+
+export interface RiskAssessmentInput {
+  lifestyle: LifestyleData
+  indicators: Map<string, number>
+}
