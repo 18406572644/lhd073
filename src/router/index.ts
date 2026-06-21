@@ -5,6 +5,7 @@ import TrendsPage from '@/pages/TrendsPage.vue'
 import SearchPage from '@/pages/SearchPage.vue'
 import OcrPage from '@/pages/OcrPage.vue'
 import RiskAssessmentPage from '@/pages/RiskAssessmentPage.vue'
+import FamilyHealthPage from '@/pages/FamilyHealthPage.vue'
 
 const routes = [
   {
@@ -36,6 +37,11 @@ const routes = [
     path: '/ocr',
     name: 'ocr',
     component: OcrPage,
+  },
+  {
+    path: '/family',
+    name: 'family',
+    component: FamilyHealthPage,
   },
 ]
 
