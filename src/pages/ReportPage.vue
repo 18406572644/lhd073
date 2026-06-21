@@ -1003,135 +1003,147 @@ onMounted(() => {
       preset="dialog"
       title="PDF 导出设置"
       :mask-closable="false"
-      :content-style="{ width: '680px', maxHeight: '85vh', overflow: 'auto' }"
+      :content-style="{ width: '680px', maxWidth: '90vw', maxHeight: '85vh' }"
+      :body-style="{ padding: '0 0 16px 0', maxHeight: '70vh', overflowY: 'auto', overflowX: 'hidden' }"
       positive-text="确认导出"
       negative-text="取消"
       :loading="isExporting"
       @positive-click="confirmExportPdf"
       @negative-click="closeExportModal"
     >
-      <NTabs v-model:value="activeTab" type="line">
-        <NTabPane name="template" tab="报告模板">
-          <div style="padding: 16px 0;">
-            <NGrid :cols="1" :y-gap="16">
-              <NGi v-for="opt in REPORT_TEMPLATE_OPTIONS" :key="opt.value">
-                <div
-                  :style="{
-                    padding: '16px',
-                    borderRadius: '8px',
-                    border: pdfConfig.template === opt.value ? '2px solid #4A90D9' : '1px solid #e0e0e0',
-                    backgroundColor: pdfConfig.template === opt.value ? '#f0f7ff' : '#fff',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                  }"
-                  @click="pdfConfig.template = opt.value as ReportTemplateType; onTemplateChange(opt.value as ReportTemplateType)"
-                >
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-size: 16px; font-weight: 600; color: #333;">{{ opt.label }}</span>
-                    <NCheckbox :checked="pdfConfig.template === opt.value" @update:checked="() => { pdfConfig.template = opt.value as ReportTemplateType; onTemplateChange(opt.value as ReportTemplateType); }" />
-                  </div>
-                  <div style="font-size: 13px; color: #666; line-height: 1.6;">{{ opt.description }}</div>
-                </div>
-              </NGi>
-            </NGrid>
-          </div>
-        </NTabPane>
-
-        <NTabPane name="cover" tab="自定义封面">
-          <div style="padding: 16px 0;">
-            <NForm label-placement="left" label-width="100px">
-              <NFormItem label="家庭名称">
-                <NInput
-                  v-model:value="pdfConfig.cover.familyName"
-                  placeholder="例如：王家健康档案"
-                  clearable
-                />
-              </NFormItem>
-              <NFormItem label="副标题">
-                <NInput
-                  v-model:value="pdfConfig.cover.subtitle"
-                  placeholder="例如：2024年度健康总结"
-                  clearable
-                />
-              </NFormItem>
-              <NFormItem label="头像/Logo">
-                <div v-if="logoPreviewUrl" style="display: flex; align-items: center; gap: 16px;">
-                  <img :src="logoPreviewUrl" style="width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid #e0e0e0;" />
-                  <NSpace>
-                    <NButton size="small" @click="removeLogo">
-                      <template #icon>
-                        <NIcon><X /></NIcon>
-                      </template>
-                      移除
-                    </NButton>
-                  </NSpace>
-                </div>
-                <NUpload
-                  v-else
-                  :custom-request="handleLogoUpload"
-                  :show-file-list="false"
-                  accept="image/*"
-                >
-                  <NUploadDragger style="padding: 20px;">
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                      <NIcon :size="28" color="#999"><Upload /></NIcon>
-                      <div style="font-size: 14px; color: #666;">点击或拖拽上传头像/Logo</div>
-                      <div style="font-size: 12px; color: #999;">支持 JPG、PNG 格式，大小不超过 2MB</div>
+      <div style="padding: 0 24px; box-sizing: border-box; width: 100%;">
+        <NTabs v-model:value="activeTab" type="line" style="width: 100%;">
+          <NTabPane name="template" tab="报告模板">
+            <div style="padding: 16px 0; width: 100%; box-sizing: border-box;">
+              <NGrid :cols="1" :y-gap="16" style="width: 100%;">
+                <NGi v-for="opt in REPORT_TEMPLATE_OPTIONS" :key="opt.value">
+                  <div
+                    :style="{
+                      padding: '16px',
+                      borderRadius: '8px',
+                      border: pdfConfig.template === opt.value ? '2px solid #4A90D9' : '1px solid #e0e0e0',
+                      backgroundColor: pdfConfig.template === opt.value ? '#f0f7ff' : '#fff',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      boxSizing: 'border-box',
+                      width: '100%',
+                    }"
+                    @click="pdfConfig.template = opt.value as ReportTemplateType; onTemplateChange(opt.value as ReportTemplateType)"
+                  >
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                      <span style="font-size: 16px; font-weight: 600; color: #333;">{{ opt.label }}</span>
+                      <NCheckbox :checked="pdfConfig.template === opt.value" @update:checked="() => { pdfConfig.template = opt.value as ReportTemplateType; onTemplateChange(opt.value as ReportTemplateType); }" />
                     </div>
-                  </NUploadDragger>
-                </NUpload>
-              </NFormItem>
-            </NForm>
-          </div>
-        </NTabPane>
-
-        <NTabPane name="sections" tab="章节选择">
-          <div style="padding: 16px 0;">
-            <div style="font-size: 13px; color: #666; margin-bottom: 12px;">勾选需要包含在 PDF 报告中的章节：</div>
-            <NGrid :cols="1" :y-gap="12">
-              <NGi v-for="opt in REPORT_SECTION_OPTIONS" :key="opt.value">
-                <div style="display: flex; align-items: flex-start; gap: 8px;">
-                  <NCheckbox
-                    :checked="pdfConfig.sections[opt.value]"
-                    @update:checked="(v: boolean) => { pdfConfig.sections[opt.value] = v }"
-                  />
-                  <div>
-                    <div style="font-size: 14px; font-weight: 500; color: #333;">{{ opt.label }}</div>
-                    <div style="font-size: 12px; color: #999; margin-top: 2px;">{{ opt.description }}</div>
+                    <div style="font-size: 13px; color: #666; line-height: 1.6; word-break: break-all;">{{ opt.description }}</div>
                   </div>
-                </div>
-              </NGi>
-            </NGrid>
-          </div>
-        </NTabPane>
+                </NGi>
+              </NGrid>
+            </div>
+          </NTabPane>
 
-        <NTabPane name="headerFooter" tab="页眉页脚">
-          <div style="padding: 16px 0;">
-            <NForm label-placement="left" label-width="120px">
-              <NFormItem label="页眉文字">
-                <NInput
-                  v-model:value="pdfConfig.headerFooter.headerText"
-                  placeholder="例如：XX 家庭健康档案"
-                  clearable
-                />
-              </NFormItem>
-              <NFormItem label="显示页码">
-                <NSwitch v-model:value="pdfConfig.headerFooter.showPageNumber" />
-              </NFormItem>
-              <NFormItem label="显示生成日期">
-                <NSwitch v-model:value="pdfConfig.headerFooter.showGenerateDate" />
-              </NFormItem>
-              <NFormItem label="页脚文字">
-                <NInput
-                  v-model:value="pdfConfig.headerFooter.footerText"
-                  placeholder="例如：机密文件 请勿外传"
-                  clearable
-                />
-              </NFormItem>
-            </NForm>
-          </div>
-        </NTabPane>
-      </NTabs>
+          <NTabPane name="cover" tab="自定义封面">
+            <div style="padding: 16px 0; width: 100%; box-sizing: border-box;">
+              <NForm label-placement="left" label-width="100px" style="width: 100%;">
+                <NFormItem label="家庭名称" label-placement="left">
+                  <NInput
+                    v-model:value="pdfConfig.cover.familyName"
+                    placeholder="例如：王家健康档案"
+                    clearable
+                    style="width: 100%;"
+                  />
+                </NFormItem>
+                <NFormItem label="副标题" label-placement="left">
+                  <NInput
+                    v-model:value="pdfConfig.cover.subtitle"
+                    placeholder="例如：2024年度健康总结"
+                    clearable
+                    style="width: 100%;"
+                  />
+                </NFormItem>
+                <NFormItem label="头像/Logo" label-placement="left">
+                  <div v-if="logoPreviewUrl" style="display: flex; align-items: center; gap: 16px;">
+                    <div style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background: #f9f9f9;">
+                      <img :src="logoPreviewUrl" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                    </div>
+                    <NSpace>
+                      <NButton size="small" @click="removeLogo">
+                        <template #icon>
+                          <NIcon><X /></NIcon>
+                        </template>
+                        移除
+                      </NButton>
+                    </NSpace>
+                  </div>
+                  <NUpload
+                    v-else
+                    :custom-request="handleLogoUpload"
+                    :show-file-list="false"
+                    accept="image/*"
+                    style="width: 100%;"
+                  >
+                    <NUploadDragger style="padding: 20px; width: 100%; box-sizing: border-box;">
+                      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        <NIcon :size="28" color="#999"><Upload /></NIcon>
+                        <div style="font-size: 14px; color: #666;">点击或拖拽上传头像/Logo</div>
+                        <div style="font-size: 12px; color: #999;">支持 JPG、PNG 格式，大小不超过 2MB</div>
+                      </div>
+                    </NUploadDragger>
+                  </NUpload>
+                </NFormItem>
+              </NForm>
+            </div>
+          </NTabPane>
+
+          <NTabPane name="sections" tab="章节选择">
+            <div style="padding: 16px 0; width: 100%; box-sizing: border-box;">
+              <div style="font-size: 13px; color: #666; margin-bottom: 12px;">勾选需要包含在 PDF 报告中的章节：</div>
+              <NGrid :cols="1" :y-gap="12" style="width: 100%;">
+                <NGi v-for="opt in REPORT_SECTION_OPTIONS" :key="opt.value">
+                  <div style="display: flex; align-items: flex-start; gap: 8px; width: 100%; box-sizing: border-box;">
+                    <NCheckbox
+                      :checked="pdfConfig.sections[opt.value]"
+                      @update:checked="(v: boolean) => { pdfConfig.sections[opt.value] = v }"
+                    />
+                    <div style="flex: 1; min-width: 0;">
+                      <div style="font-size: 14px; font-weight: 500; color: #333; word-break: break-all;">{{ opt.label }}</div>
+                      <div style="font-size: 12px; color: #999; margin-top: 2px; word-break: break-all;">{{ opt.description }}</div>
+                    </div>
+                  </div>
+                </NGi>
+              </NGrid>
+            </div>
+          </NTabPane>
+
+          <NTabPane name="headerFooter" tab="页眉页脚">
+            <div style="padding: 16px 0; width: 100%; box-sizing: border-box;">
+              <NForm label-placement="left" label-width="120px" style="width: 100%;">
+                <NFormItem label="页眉文字" label-placement="left">
+                  <NInput
+                    v-model:value="pdfConfig.headerFooter.headerText"
+                    placeholder="例如：XX 家庭健康档案"
+                    clearable
+                    style="width: 100%;"
+                  />
+                </NFormItem>
+                <NFormItem label="显示页码" label-placement="left">
+                  <NSwitch v-model:value="pdfConfig.headerFooter.showPageNumber" />
+                </NFormItem>
+                <NFormItem label="显示生成日期" label-placement="left">
+                  <NSwitch v-model:value="pdfConfig.headerFooter.showGenerateDate" />
+                </NFormItem>
+                <NFormItem label="页脚文字" label-placement="left">
+                  <NInput
+                    v-model:value="pdfConfig.headerFooter.footerText"
+                    placeholder="例如：机密文件 请勿外传"
+                    clearable
+                    style="width: 100%;"
+                  />
+                </NFormItem>
+              </NForm>
+            </div>
+          </NTabPane>
+        </NTabs>
+      </div>
     </NModal>
   </div>
 </template>

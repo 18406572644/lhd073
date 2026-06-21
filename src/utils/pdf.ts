@@ -45,6 +45,62 @@ function todayDisplay(): string {
   return `${d.getFullYear()}年${String(d.getMonth() + 1).padStart(2, '0')}月${String(d.getDate()).padStart(2, '0')}日`
 }
 
+function getImageSize(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      resolve({ width: img.width, height: img.height })
+    }
+    img.onerror = reject
+    img.src = dataUrl
+  })
+}
+
+async function computeScaledImageSize(
+  dataUrl: string,
+  maxWidth: number,
+  maxHeight: number
+): Promise<{ width: number; height: number }> {
+  try {
+    const { width: imgW, height: imgH } = await getImageSize(dataUrl)
+    if (imgW <= 0 || imgH <= 0) {
+      return { width: maxWidth, height: maxHeight }
+    }
+    const scale = Math.min(maxWidth / imgW, maxHeight / imgH)
+    return {
+      width: imgW * scale,
+      height: imgH * scale,
+    }
+  } catch {
+    return { width: maxWidth, height: maxHeight }
+  }
+}
+
+async function renderImageFit(
+  doc: jsPDF,
+  dataUrl: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  maxHeight: number
+): Promise<void> {
+  const size = await computeScaledImageSize(dataUrl, maxWidth, maxHeight)
+  const offsetX = x + (maxWidth - size.width) / 2
+  const offsetY = y + (maxHeight - size.height) / 2
+  let added = false
+  try {
+    doc.addImage(dataUrl, 'JPEG', offsetX, offsetY, size.width, size.height)
+    added = true
+  } catch {
+  }
+  if (!added) {
+    try {
+      doc.addImage(dataUrl, 'PNG', offsetX, offsetY, size.width, size.height)
+    } catch {
+    }
+  }
+}
+
 function checkY(doc: jsPDF, y: number, needed: number): number {
   if (y + needed > PAGE_HEIGHT - MARGIN - 20) {
     doc.addPage()
@@ -267,45 +323,61 @@ function applyHeadersFooters(doc: jsPDF, config: PdfExportConfig): void {
   }
 }
 
-function renderCoverPage(doc: jsPDF, config: PdfExportConfig, report: HealthReport): void {
-  if (!config.cover.familyName && !config.cover.logoDataUrl && config.cover.subtitle === '家庭健康档案') {
+async function renderCoverPage(doc: jsPDF, config: PdfExportConfig, report: HealthReport): Promise<void> {
+  const hasCustomCover = config.cover.familyName || config.cover.logoDataUrl || config.cover.subtitle !== '家庭健康档案'
+  if (!hasCustomCover) {
     return
   }
 
   const centerX = PAGE_WIDTH / 2
-  let y = PAGE_HEIGHT / 2 - 60
+  let y = PAGE_HEIGHT / 2 - 70
 
   if (config.cover.logoDataUrl) {
     try {
-      const logoSize = 30
-      doc.addImage(config.cover.logoDataUrl, 'PNG', centerX - logoSize / 2, y - logoSize - 10, logoSize, logoSize)
+      const maxLogoSize = 35
+      const logoSize = await computeScaledImageSize(config.cover.logoDataUrl, maxLogoSize, maxLogoSize)
+      const logoX = centerX - logoSize.width / 2
+      const logoY = y - logoSize.height - 12
+      let added = false
+      try {
+        doc.addImage(config.cover.logoDataUrl, 'PNG', logoX, logoY, logoSize.width, logoSize.height)
+        added = true
+      } catch {
+      }
+      if (!added) {
+        try {
+          doc.addImage(config.cover.logoDataUrl, 'JPEG', logoX, logoY, logoSize.width, logoSize.height)
+        } catch {
+        }
+      }
+      y -= logoSize.height + 8
     } catch {
     }
   }
 
   if (config.cover.familyName) {
     y = renderCnTextCentered(doc, config.cover.familyName, centerX, y, 26, BLUE_R, BLUE_G, BLUE_B)
-    y += 6
+    y += 8
   }
 
   if (config.cover.subtitle) {
     y = renderCnTextCentered(doc, config.cover.subtitle, centerX, y, 16, 80, 80, 80)
-    y += 10
+    y += 12
   }
 
   doc.setDrawColor(BLUE_R, BLUE_G, BLUE_B)
   doc.setLineWidth(0.8)
   doc.line(MARGIN + 30, y, PAGE_WIDTH - MARGIN - 30, y)
-  y += 12
+  y += 14
 
   y = renderCnTextCentered(doc, report.basicInfo.reportTitle, centerX, y, 18, 0, 0, 0)
-  y += 8
+  y += 10
   y = renderCnTextCentered(doc, 'HEALTH ANALYSIS REPORT', centerX, y, 11, 150, 150, 150)
-  y += 20
+  y += 24
   y = renderCnTextCentered(doc, `生成日期：${report.basicInfo.generateDate}`, centerX, y, 11, 100, 100, 100)
-  y += 6
+  y += 8
   y = renderCnTextCentered(doc, `报告范围：${report.basicInfo.dateRange}`, centerX, y, 11, 100, 100, 100)
-  y += 6
+  y += 8
   y = renderCnTextCentered(doc, `体检记录：${report.basicInfo.recordCount} 份`, centerX, y, 11, 100, 100, 100)
 
   doc.addPage()
@@ -347,52 +419,55 @@ function renderSimpleTemplate(
     y = renderCnTextCentered(doc, '恭喜！当前报告周期内未发现异常指标', PAGE_WIDTH / 2, y + 4, 12, GREEN_R, GREEN_G, GREEN_B)
     y += 20
   } else {
-    const abnColWidths = [35, 18, 15, 35, 15, 28]
-    const abnColX = [MARGIN]
+    const abnColWidths = [40, 18, 12, 38, 12, 46]
+    const abnColX = [MARGIN + 2]
     for (let i = 1; i < abnColWidths.length; i++) {
       abnColX.push(abnColX[i - 1] + abnColWidths[i - 1])
     }
     const abnHeaders = ['指标名称', '最新值', '单位', '正常范围', '次数', '状态']
+    const rowHeight = 9
 
     y = checkY(doc, y, 12)
     doc.setFillColor(RED_R, RED_G, RED_B)
-    doc.rect(MARGIN, y, CONTENT_WIDTH, 7, 'F')
+    doc.rect(MARGIN, y, CONTENT_WIDTH, rowHeight, 'F')
     for (let i = 0; i < abnHeaders.length; i++) {
-      renderCnText(doc, abnHeaders[i], abnColX[i] + 2, y + 2, 8, 255, 255, 255)
+      renderCnText(doc, abnHeaders[i], abnColX[i] + 2, y + 2.5, 8, 255, 255, 255)
     }
-    y += 7
+    y += rowHeight
 
     const displayAbnormals = report.abnormalSummary.slice(0, 15)
     for (let i = 0; i < displayAbnormals.length; i++) {
       const abn = displayAbnormals[i]
-      y = checkY(doc, y, 10)
+      y = checkY(doc, y, rowHeight + 2)
 
       if (i % 2 === 0) {
         doc.setFillColor(255, 240, 240)
-        doc.rect(MARGIN, y, CONTENT_WIDTH, 8, 'F')
+        doc.rect(MARGIN, y, CONTENT_WIDTH, rowHeight, 'F')
       }
 
       const dirText = abn.direction === 'high' ? '↑偏高' : '↓偏低'
       const rangeText = `${abn.normalRange.min}-${abn.normalRange.max}`
 
-      renderCnText(doc, abn.indicatorName, abnColX[0] + 2, y + 2, 8, 0, 0, 0)
+      const nameLines = wrapCnText(abn.indicatorName, 8, abnColWidths[0] - 4)
+      renderCnText(doc, nameLines[0] || '', abnColX[0] + 2, y + 2, 8, 0, 0, 0)
+
       doc.setTextColor(RED_R, RED_G, RED_B)
       doc.setFontSize(8)
-      doc.text(String(abn.latestValue), abnColX[1] + 2, y + 6)
+      doc.text(String(abn.latestValue), abnColX[1] + 2, y + 5.5)
       doc.setTextColor(0, 0, 0)
-      doc.text(abn.unit, abnColX[2] + 2, y + 6)
+      doc.text(abn.unit, abnColX[2] + 2, y + 5.5)
       doc.setFontSize(7)
-      doc.text(rangeText, abnColX[3] + 2, y + 6)
+      doc.text(rangeText, abnColX[3] + 2, y + 5.5)
       doc.setTextColor(80, 80, 80)
       doc.setFontSize(8)
-      doc.text(String(abn.count), abnColX[4] + 4, y + 6)
+      doc.text(String(abn.count), abnColX[4] + 4, y + 5.5)
       renderCnText(doc, dirText, abnColX[5] + 2, y + 2, 8, RED_R, RED_G, RED_B)
 
-      y += 8
+      y += rowHeight
     }
     doc.setDrawColor(200, 200, 200)
     doc.setLineWidth(0.2)
-    doc.rect(MARGIN, y - displayAbnormals.length * 8, CONTENT_WIDTH, displayAbnormals.length * 8 + 7, 'S')
+    doc.rect(MARGIN, y - displayAbnormals.length * rowHeight, CONTENT_WIDTH, displayAbnormals.length * rowHeight + rowHeight, 'S')
 
     if (report.abnormalSummary.length > 15) {
       y = checkY(doc, y, 10)
@@ -464,28 +539,30 @@ function renderMedicalTemplate(
     const importantAbnormals = report.abnormalSummary.filter(a => a.count >= 2 || a.trend === 'worsening')
     const displayAbnormals = importantAbnormals.length > 0 ? importantAbnormals : report.abnormalSummary
 
-    const abnColWidths = [30, 16, 12, 30, 12, 12, 20, 28]
-    const abnColX = [MARGIN]
+    const abnColWidths = [38, 16, 10, 30, 10, 14, 20, 28]
+    const abnColX = [MARGIN + 2]
     for (let i = 1; i < abnColWidths.length; i++) {
       abnColX.push(abnColX[i - 1] + abnColWidths[i - 1])
     }
     const abnHeaders = ['指标名称', '最新值', '单位', '正常范围', '次数', '趋势', '持续时间', '就诊建议']
+    const rowHeight = 10
 
     y = checkY(doc, y, 12)
     doc.setFillColor(RED_R, RED_G, RED_B)
-    doc.rect(MARGIN, y, CONTENT_WIDTH, 8, 'F')
+    doc.rect(MARGIN, y, CONTENT_WIDTH, rowHeight, 'F')
     for (let i = 0; i < abnHeaders.length; i++) {
-      renderCnText(doc, abnHeaders[i], abnColX[i] + 2, y + 2.5, 7.5, 255, 255, 255)
+      renderCnText(doc, abnHeaders[i], abnColX[i] + 2, y + 3, 7.5, 255, 255, 255)
     }
-    y += 8
+    y += rowHeight
 
-    for (let i = 0; i < displayAbnormals.length && i < 20; i++) {
+    const displayCount = Math.min(displayAbnormals.length, 20)
+    for (let i = 0; i < displayCount; i++) {
       const abn = displayAbnormals[i]
-      y = checkY(doc, y, 12)
+      y = checkY(doc, y, rowHeight + 2)
 
       if (i % 2 === 0) {
         doc.setFillColor(255, 240, 240)
-        doc.rect(MARGIN, y, CONTENT_WIDTH, 10, 'F')
+        doc.rect(MARGIN, y, CONTENT_WIDTH, rowHeight, 'F')
       }
 
       const dirText = abn.direction === 'high' ? '↑' : '↓'
@@ -496,26 +573,28 @@ function renderMedicalTemplate(
 
       const medicalAdvice = abn.count >= 3 ? '建议复查' : abn.trend === 'worsening' ? '尽快就医' : '持续观察'
 
-      renderCnText(doc, abn.indicatorName, abnColX[0] + 2, y + 2, 7.5, 0, 0, 0)
+      const nameLines = wrapCnText(abn.indicatorName, 7.5, abnColWidths[0] - 4)
+      renderCnText(doc, nameLines[0] || '', abnColX[0] + 2, y + 2.5, 7.5, 0, 0, 0)
+
       doc.setTextColor(RED_R, RED_G, RED_B)
       doc.setFontSize(7.5)
-      doc.text(`${dirText}${abn.latestValue}`, abnColX[1] + 2, y + 6.5)
+      doc.text(`${dirText}${abn.latestValue}`, abnColX[1] + 2, y + 6)
       doc.setTextColor(0, 0, 0)
-      doc.text(abn.unit, abnColX[2] + 2, y + 6.5)
+      doc.text(abn.unit, abnColX[2] + 2, y + 6)
       doc.setFontSize(6.5)
-      doc.text(rangeText, abnColX[3] + 2, y + 6.5)
+      doc.text(rangeText, abnColX[3] + 2, y + 6)
       doc.setTextColor(80, 80, 80)
       doc.setFontSize(7.5)
-      doc.text(String(abn.count), abnColX[4] + 4, y + 6.5)
-      renderCnText(doc, trendText, abnColX[5] + 2, y + 2, 7.5, trendColor[0], trendColor[1], trendColor[2])
-      renderCnText(doc, durationText, abnColX[6] + 2, y + 2, 7, 80, 80, 80)
-      renderCnText(doc, medicalAdvice, abnColX[7] + 2, y + 2, 7.5, RED_R, RED_G, RED_B)
+      doc.text(String(abn.count), abnColX[4] + 3, y + 6)
+      renderCnText(doc, trendText, abnColX[5] + 2, y + 2.5, 7.5, trendColor[0], trendColor[1], trendColor[2])
+      renderCnText(doc, durationText, abnColX[6] + 2, y + 2.5, 7, 80, 80, 80)
+      renderCnText(doc, medicalAdvice, abnColX[7] + 2, y + 2.5, 7.5, RED_R, RED_G, RED_B)
 
-      y += 10
+      y += rowHeight
     }
     doc.setDrawColor(RED_R, RED_G, RED_B)
     doc.setLineWidth(0.3)
-    doc.rect(MARGIN, y - displayAbnormals.length * 10, CONTENT_WIDTH, Math.min(displayAbnormals.length, 20) * 10 + 8, 'S')
+    doc.rect(MARGIN, y - displayCount * rowHeight, CONTENT_WIDTH, displayCount * rowHeight + rowHeight, 'S')
   }
 
   if (config.sections.comparison && report.compareChanges.length > 0) {
@@ -526,27 +605,28 @@ function renderMedicalTemplate(
     const importantChanges = report.compareChanges.filter(c => c.statusChange !== 'both_normal').slice(0, 15)
 
     if (importantChanges.length > 0) {
-      const changeColWidths = [35, 22, 22, 24, 24, 28]
-      const changeColX = [MARGIN]
+      const changeColWidths = [40, 22, 20, 24, 24, 36]
+      const changeColX = [MARGIN + 2]
       for (let i = 1; i < changeColWidths.length; i++) {
         changeColX.push(changeColX[i - 1] + changeColWidths[i - 1])
       }
       const changeHeaders = ['指标名称', '上次', '本次', '变化值', '变化率', '状态']
+      const changeRowHeight = 9
 
       doc.setFillColor(BLUE_R, BLUE_G, BLUE_B)
-      doc.rect(MARGIN, y, CONTENT_WIDTH, 7, 'F')
+      doc.rect(MARGIN, y, CONTENT_WIDTH, changeRowHeight, 'F')
       for (let i = 0; i < changeHeaders.length; i++) {
-        renderCnText(doc, changeHeaders[i], changeColX[i] + 2, y + 2, 8, 255, 255, 255)
+        renderCnText(doc, changeHeaders[i], changeColX[i] + 2, y + 2.5, 8, 255, 255, 255)
       }
-      y += 7
+      y += changeRowHeight
 
       for (let i = 0; i < importantChanges.length; i++) {
         const chg = importantChanges[i]
-        y = checkY(doc, y, 10)
+        y = checkY(doc, y, changeRowHeight + 2)
 
         if (i % 2 === 0) {
           doc.setFillColor(LIGHT_BLUE_R, LIGHT_BLUE_G, LIGHT_BLUE_B)
-          doc.rect(MARGIN, y, CONTENT_WIDTH, 8, 'F')
+          doc.rect(MARGIN, y, CONTENT_WIDTH, changeRowHeight, 'F')
         }
 
         let statusChangeText = '-'
@@ -563,7 +643,9 @@ function renderMedicalTemplate(
         const changePercentText = chg.previousValue !== null ? `${changeSymbol}${chg.changePercent.toFixed(1)}%` : '-'
         const changeColor = chg.direction === 'up' ? [RED_R, RED_G, RED_B] : chg.direction === 'down' ? [GREEN_R, GREEN_G, GREEN_B] : [120, 120, 120]
 
-        renderCnText(doc, chg.indicatorName, changeColX[0] + 2, y + 1.5, 8, 0, 0, 0)
+        const nameLines = wrapCnText(chg.indicatorName, 8, changeColWidths[0] - 4)
+        renderCnText(doc, nameLines[0] || '', changeColX[0] + 2, y + 2, 8, 0, 0, 0)
+
         doc.setFontSize(8)
         doc.setTextColor(chg.isPreviousAbnormal ? RED_R : 0, chg.isPreviousAbnormal ? RED_G : 0, chg.isPreviousAbnormal ? RED_B : 0)
         doc.text(chg.previousValue !== null ? String(chg.previousValue) : '-', changeColX[1] + 2, y + 5.5)
@@ -573,13 +655,13 @@ function renderMedicalTemplate(
         doc.text(changeText, changeColX[3] + 2, y + 5.5)
         doc.text(changePercentText, changeColX[4] + 2, y + 5.5)
         doc.setTextColor(0, 0, 0)
-        renderCnText(doc, statusChangeText, changeColX[5] + 2, y + 1.5, 8, statusChangeColor[0], statusChangeColor[1], statusChangeColor[2])
+        renderCnText(doc, statusChangeText, changeColX[5] + 2, y + 2, 8, statusChangeColor[0], statusChangeColor[1], statusChangeColor[2])
 
-        y += 8
+        y += changeRowHeight
       }
       doc.setDrawColor(200, 200, 200)
       doc.setLineWidth(0.2)
-      doc.rect(MARGIN, y - importantChanges.length * 8, CONTENT_WIDTH, importantChanges.length * 8 + 7, 'S')
+      doc.rect(MARGIN, y - importantChanges.length * changeRowHeight, CONTENT_WIDTH, importantChanges.length * changeRowHeight + changeRowHeight, 'S')
     }
   }
 
@@ -655,14 +737,14 @@ function renderMedicalTemplate(
   return y
 }
 
-function renderDetailedTemplate(
+async function renderDetailedTemplate(
   doc: jsPDF,
   report: HealthReport,
   trends: KeyIndicatorTrend[],
   indicators: IndicatorItem[],
   config: PdfExportConfig,
   records: ExamRecord[]
-): number {
+): Promise<number> {
   let y = MARGIN
 
   y = drawSectionHeader(doc, '一、健康总评', y)
@@ -693,28 +775,31 @@ function renderDetailedTemplate(
     y = renderCnTextCentered(doc, '恭喜！当前报告周期内未发现异常指标', PAGE_WIDTH / 2, y + 4, 12, GREEN_R, GREEN_G, GREEN_B)
     y += 20
   } else {
-    const abnColWidths = [35, 18, 15, 35, 15, 15, 28]
-    const abnColX = [MARGIN]
+    const abnColWidths = [36, 18, 12, 38, 12, 16, 34]
+    const abnColX = [MARGIN + 2]
     for (let i = 1; i < abnColWidths.length; i++) {
       abnColX.push(abnColX[i - 1] + abnColWidths[i - 1])
     }
     const abnHeaders = ['指标名称', '最新值', '单位', '正常范围', '次数', '趋势', '状态']
+    const rowHeight = 9
+    const paddingX = 2
 
     y = checkY(doc, y, 12)
     doc.setFillColor(BLUE_R, BLUE_G, BLUE_B)
-    doc.rect(MARGIN, y, CONTENT_WIDTH, 7, 'F')
+    doc.rect(MARGIN, y, CONTENT_WIDTH, rowHeight, 'F')
     for (let i = 0; i < abnHeaders.length; i++) {
-      renderCnText(doc, abnHeaders[i], abnColX[i] + 2, y + 2, 8, 255, 255, 255)
+      renderCnText(doc, abnHeaders[i], abnColX[i] + paddingX, y + 2, 8, 255, 255, 255)
     }
-    y += 7
+    y += rowHeight
 
-    for (let i = 0; i < report.abnormalSummary.length; i++) {
-      const abn = report.abnormalSummary[i]
-      y = checkY(doc, y, 10)
+    const displayAbnormals = report.abnormalSummary
+    for (let i = 0; i < displayAbnormals.length; i++) {
+      const abn = displayAbnormals[i]
+      y = checkY(doc, y, rowHeight + 2)
 
       if (i % 2 === 0) {
         doc.setFillColor(LIGHT_BLUE_R, LIGHT_BLUE_G, LIGHT_BLUE_B)
-        doc.rect(MARGIN, y, CONTENT_WIDTH, 8, 'F')
+        doc.rect(MARGIN, y, CONTENT_WIDTH, rowHeight, 'F')
       }
 
       const dirText = abn.direction === 'high' ? '↑偏高' : '↓偏低'
@@ -724,25 +809,27 @@ function renderDetailedTemplate(
       const trendB = abn.trend === 'improving' ? GREEN_B : abn.trend === 'worsening' ? RED_B : ORANGE_B
       const rangeText = `${abn.normalRange.min}-${abn.normalRange.max}`
 
-      renderCnText(doc, abn.indicatorName, abnColX[0] + 2, y + 2, 8, 0, 0, 0)
+      const nameLines = wrapCnText(abn.indicatorName, 8, abnColWidths[0] - paddingX * 2)
+      renderCnText(doc, nameLines[0] || '', abnColX[0] + paddingX, y + 1.5, 8, 0, 0, 0)
+
       doc.setTextColor(RED_R, RED_G, RED_B)
       doc.setFontSize(8)
-      doc.text(String(abn.latestValue), abnColX[1] + 2, y + 6)
+      doc.text(String(abn.latestValue), abnColX[1] + paddingX, y + 5)
       doc.setTextColor(0, 0, 0)
-      doc.text(abn.unit, abnColX[2] + 2, y + 6)
+      doc.text(abn.unit, abnColX[2] + paddingX, y + 5)
       doc.setFontSize(7)
-      doc.text(rangeText, abnColX[3] + 2, y + 6)
+      doc.text(rangeText, abnColX[3] + paddingX, y + 5)
       doc.setTextColor(80, 80, 80)
       doc.setFontSize(8)
-      doc.text(String(abn.count), abnColX[4] + 4, y + 6)
-      renderCnText(doc, trendText, abnColX[5] + 2, y + 2, 8, trendR, trendG, trendB)
-      renderCnText(doc, dirText, abnColX[6] + 2, y + 2, 8, RED_R, RED_G, RED_B)
+      doc.text(String(abn.count), abnColX[4] + paddingX + 4, y + 5)
+      renderCnText(doc, trendText, abnColX[5] + paddingX, y + 1.5, 8, trendR, trendG, trendB)
+      renderCnText(doc, dirText, abnColX[6] + paddingX, y + 1.5, 8, RED_R, RED_G, RED_B)
 
-      y += 8
+      y += rowHeight
     }
     doc.setDrawColor(200, 200, 200)
     doc.setLineWidth(0.2)
-    doc.rect(MARGIN, y - report.abnormalSummary.length * 8, CONTENT_WIDTH, report.abnormalSummary.length * 8 + 7, 'S')
+    doc.rect(MARGIN, y - displayAbnormals.length * rowHeight, CONTENT_WIDTH, displayAbnormals.length * rowHeight + rowHeight, 'S')
   }
 
   if (config.sections.trends && trends.length > 0) {
@@ -785,56 +872,59 @@ function renderDetailedTemplate(
       renderCnText(doc, rateText, MARGIN + CONTENT_WIDTH - rateW - 6, y + 4, 10, rateColor[0], rateColor[1], rateColor[2])
       y += 12
 
-      const sysColWidths = [42, 22, 12, 38, 20, 38]
+      const sysColWidths = [40, 18, 10, 32, 18, 48]
       const sysColX = [MARGIN + 2]
       for (let i = 1; i < sysColWidths.length; i++) {
         sysColX.push(sysColX[i - 1] + sysColWidths[i - 1])
       }
       const sysHeaders = ['指标名称', '数值', '单位', '正常范围', '状态', '提示']
+      const sysRowHeight = 9
 
       doc.setFillColor(235, 245, 255)
-      doc.rect(MARGIN, y, CONTENT_WIDTH, 7, 'F')
+      doc.rect(MARGIN, y, CONTENT_WIDTH, sysRowHeight, 'F')
       for (let i = 0; i < sysHeaders.length; i++) {
-        renderCnText(doc, sysHeaders[i], sysColX[i], y + 2, 8, 80, 80, 80)
+        renderCnText(doc, sysHeaders[i], sysColX[i] + 2, y + 2.5, 8, 80, 80, 80)
       }
-      y += 7
+      y += sysRowHeight
 
       for (let indIdx = 0; indIdx < sys.indicators.length; indIdx++) {
         const ind = sys.indicators[indIdx]
-        y = checkY(doc, y, 8)
+        y = checkY(doc, y, sysRowHeight + 2)
 
         if (indIdx % 2 === 1) {
           doc.setFillColor(250, 252, 255)
-          doc.rect(MARGIN, y, CONTENT_WIDTH, 7, 'F')
+          doc.rect(MARGIN, y, CONTENT_WIDTH, sysRowHeight, 'F')
         }
 
         const vColor = ind.isAbnormal ? [RED_R, RED_G, RED_B] : [0, 0, 0]
         const statusText = ind.isAbnormal ? (ind.direction === 'high' ? '↑偏高' : '↓偏低') : '正常'
         const statusColor = ind.isAbnormal ? [RED_R, RED_G, RED_B] : [GREEN_R, GREEN_G, GREEN_B]
 
-        renderCnText(doc, ind.name, sysColX[0], y + 1.5, 8, 0, 0, 0)
+        const nameLines = wrapCnText(ind.name, 8, sysColWidths[0] - 4)
+        renderCnText(doc, nameLines[0] || '', sysColX[0] + 2, y + 2, 8, 0, 0, 0)
+
         doc.setTextColor(vColor[0], vColor[1], vColor[2])
         doc.setFontSize(8)
-        doc.text(String(ind.value), sysColX[1], y + 5.5)
+        doc.text(String(ind.value), sysColX[1] + 2, y + 5.5)
         doc.setTextColor(0, 0, 0)
-        doc.text(ind.unit, sysColX[2], y + 5.5)
+        doc.text(ind.unit, sysColX[2] + 2, y + 5.5)
         doc.setFontSize(7)
-        doc.text(`${ind.normalRange.min}-${ind.normalRange.max}`, sysColX[3], y + 5.5)
-        renderCnText(doc, statusText, sysColX[4], y + 1.5, 8, statusColor[0], statusColor[1], statusColor[2])
+        doc.text(`${ind.normalRange.min}-${ind.normalRange.max}`, sysColX[3] + 2, y + 5.5)
+        renderCnText(doc, statusText, sysColX[4] + 2, y + 2, 8, statusColor[0], statusColor[1], statusColor[2])
 
         if (ind.healthNote) {
-          const noteLines = wrapCnText(ind.healthNote, 7, sysColWidths[5] - 2)
+          const noteLines = wrapCnText(ind.healthNote, 7, sysColWidths[5] - 4)
           for (let li = 0; li < noteLines.length && li < 2; li++) {
-            renderCnText(doc, noteLines[li], sysColX[5], y + 1.5 + li * 3.5, 7, 100, 100, 100)
+            renderCnText(doc, noteLines[li], sysColX[5] + 2, y + 1.5 + li * 3.5, 7, 100, 100, 100)
           }
         }
 
-        y += 7
+        y += sysRowHeight
       }
 
       doc.setDrawColor(220, 235, 250)
       doc.setLineWidth(0.2)
-      doc.rect(MARGIN, y - sys.indicators.length * 7 - 7, CONTENT_WIDTH, sys.indicators.length * 7 + 7, 'S')
+      doc.rect(MARGIN, y - sys.indicators.length * sysRowHeight - sysRowHeight, CONTENT_WIDTH, sys.indicators.length * sysRowHeight + sysRowHeight, 'S')
       y += 6
     }
   }
@@ -844,19 +934,20 @@ function renderDetailedTemplate(
     y = MARGIN
     y = drawSectionHeader(doc, '五、与上次体检对比', y)
 
-    const changeColWidths = [40, 25, 25, 28, 28, 22]
-    const changeColX = [MARGIN]
+    const changeColWidths = [42, 22, 20, 24, 24, 34]
+    const changeColX = [MARGIN + 2]
     for (let i = 1; i < changeColWidths.length; i++) {
       changeColX.push(changeColX[i - 1] + changeColWidths[i - 1])
     }
     const changeHeaders = ['指标名称', '上次', '本次', '变化值', '变化率', '状态变化']
+    const changeRowHeight = 9
 
     doc.setFillColor(BLUE_R, BLUE_G, BLUE_B)
-    doc.rect(MARGIN, y, CONTENT_WIDTH, 7, 'F')
+    doc.rect(MARGIN, y, CONTENT_WIDTH, changeRowHeight, 'F')
     for (let i = 0; i < changeHeaders.length; i++) {
-      renderCnText(doc, changeHeaders[i], changeColX[i] + 2, y + 2, 8, 255, 255, 255)
+      renderCnText(doc, changeHeaders[i], changeColX[i] + 2, y + 2.5, 8, 255, 255, 255)
     }
-    y += 7
+    y += changeRowHeight
 
     const importantChanges = report.compareChanges.filter(c => c.statusChange !== 'both_normal').slice(0, 15)
     const normalChanges = report.compareChanges.filter(c => c.statusChange === 'both_normal').slice(0, 15)
@@ -864,11 +955,11 @@ function renderDetailedTemplate(
 
     for (let i = 0; i < showChanges.length; i++) {
       const chg = showChanges[i]
-      y = checkY(doc, y, 8)
+      y = checkY(doc, y, changeRowHeight + 2)
 
       if (i % 2 === 0) {
         doc.setFillColor(LIGHT_BLUE_R, LIGHT_BLUE_G, LIGHT_BLUE_B)
-        doc.rect(MARGIN, y, CONTENT_WIDTH, 7, 'F')
+        doc.rect(MARGIN, y, CONTENT_WIDTH, changeRowHeight, 'F')
       }
 
       let statusChangeText = '-'
@@ -885,7 +976,9 @@ function renderDetailedTemplate(
       const changePercentText = chg.previousValue !== null ? `${changeSymbol}${chg.changePercent.toFixed(1)}%` : '-'
       const changeColor = chg.direction === 'up' ? [RED_R, RED_G, RED_B] : chg.direction === 'down' ? [GREEN_R, GREEN_G, GREEN_B] : [120, 120, 120]
 
-      renderCnText(doc, chg.indicatorName, changeColX[0] + 2, y + 1.5, 8, 0, 0, 0)
+      const nameLines = wrapCnText(chg.indicatorName, 8, changeColWidths[0] - 4)
+      renderCnText(doc, nameLines[0] || '', changeColX[0] + 2, y + 2, 8, 0, 0, 0)
+
       doc.setFontSize(8)
       doc.setTextColor(chg.isPreviousAbnormal ? RED_R : 0, chg.isPreviousAbnormal ? RED_G : 0, chg.isPreviousAbnormal ? RED_B : 0)
       doc.text(chg.previousValue !== null ? String(chg.previousValue) : '-', changeColX[1] + 2, y + 5.5)
@@ -895,13 +988,13 @@ function renderDetailedTemplate(
       doc.text(changeText, changeColX[3] + 2, y + 5.5)
       doc.text(changePercentText, changeColX[4] + 2, y + 5.5)
       doc.setTextColor(0, 0, 0)
-      renderCnText(doc, statusChangeText, changeColX[5] + 2, y + 1.5, 8, statusChangeColor[0], statusChangeColor[1], statusChangeColor[2])
+      renderCnText(doc, statusChangeText, changeColX[5] + 2, y + 2, 8, statusChangeColor[0], statusChangeColor[1], statusChangeColor[2])
 
-      y += 7
+      y += changeRowHeight
     }
     doc.setDrawColor(200, 200, 200)
     doc.setLineWidth(0.2)
-    doc.rect(MARGIN, y - showChanges.length * 7, CONTENT_WIDTH, showChanges.length * 7 + 7, 'S')
+    doc.rect(MARGIN, y - showChanges.length * changeRowHeight, CONTENT_WIDTH, showChanges.length * changeRowHeight + changeRowHeight, 'S')
     y += 8
   }
 
@@ -961,35 +1054,34 @@ function renderDetailedTemplate(
 
       y = drawSectionHeader(doc, '七、体检单照片', y)
 
-      const imgW = (CONTENT_WIDTH - 6) / 2
-      const imgH = imgW * 0.75
-      const gap = 6
+      const photoMaxW = (CONTENT_WIDTH - 8) / 2
+      const photoMaxH = photoMaxW * 0.7
+      const photoGap = 8
+      const photosPerPage = 4
       let photoIdx = 0
+      let currentPageY = y
 
       for (const record of records) {
         for (const photo of record.photos) {
-          if (photoIdx > 0 && photoIdx % 4 === 0) {
+          if (photoIdx > 0 && photoIdx % photosPerPage === 0) {
             doc.addPage()
-            y = MARGIN
-            y = drawSectionHeader(doc, '七、体检单照片（续）', y)
+            currentPageY = MARGIN
+            currentPageY = drawSectionHeader(doc, '七、体检单照片（续）', currentPageY)
           }
 
           const col = photoIdx % 2
-          const row = Math.floor((photoIdx % 4) / 2)
-          const imgX = MARGIN + col * (imgW + gap)
-          const imgY = y + row * (imgH + gap)
+          const row = Math.floor((photoIdx % photosPerPage) / 2)
+          const photoX = MARGIN + col * (photoMaxW + photoGap)
+          const photoY = currentPageY + row * (photoMaxH + photoGap)
 
-          try {
-            doc.addImage(photo.dataUrl, 'JPEG', imgX, imgY, imgW, imgH)
-          } catch {
-            try {
-              doc.addImage(photo.dataUrl, 'PNG', imgX, imgY, imgW, imgH)
-            } catch {
-            }
-          }
+          await renderImageFit(doc, photo.dataUrl, photoX, photoY, photoMaxW, photoMaxH)
+
           photoIdx++
         }
       }
+
+      const totalRows = Math.ceil(photoIdx / 2)
+      y = currentPageY + totalRows * (photoMaxH + photoGap)
     }
   }
 
@@ -1198,32 +1290,28 @@ export async function generatePdfArchive(records: ExamRecord[], indicators: Indi
       doc.line(MARGIN, y, MARGIN + 40, y)
       y += 8
 
-      const imgW = (CONTENT_WIDTH - 6) / 2
-      const imgH = imgW * 0.75
-      const gap = 6
+      const photoMaxW = (CONTENT_WIDTH - 8) / 2
+      const photoMaxH = photoMaxW * 0.7
+      const photoGap = 8
+      const photosPerPage = 4
       let photoIdx = 0
+      let pagePhotoY = y
 
       for (const photo of record.photos) {
-        if (photoIdx > 0 && photoIdx % 4 === 0) {
+        if (photoIdx > 0 && photoIdx % photosPerPage === 0) {
           doc.addPage()
-          y = MARGIN
-          y = renderCnText(doc, '体检单照片', MARGIN, y, 14, 0, 0, 0)
-          y += 10
+          pagePhotoY = MARGIN
+          pagePhotoY = renderCnText(doc, '体检单照片', MARGIN, pagePhotoY, 14, 0, 0, 0)
+          pagePhotoY += 10
         }
 
         const col = photoIdx % 2
-        const row = Math.floor((photoIdx % 4) / 2)
-        const imgX = MARGIN + col * (imgW + gap)
-        const imgY = y + row * (imgH + gap)
+        const row = Math.floor((photoIdx % photosPerPage) / 2)
+        const photoX = MARGIN + col * (photoMaxW + photoGap)
+        const photoY = pagePhotoY + row * (photoMaxH + photoGap)
 
-        try {
-          doc.addImage(photo.dataUrl, 'JPEG', imgX, imgY, imgW, imgH)
-        } catch {
-          try {
-            doc.addImage(photo.dataUrl, 'PNG', imgX, imgY, imgW, imgH)
-          } catch {
-          }
-        }
+        await renderImageFit(doc, photo.dataUrl, photoX, photoY, photoMaxW, photoMaxH)
+
         photoIdx++
       }
     }
@@ -1241,7 +1329,7 @@ export async function generateHealthReportPdf(
 ): Promise<void> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
-  renderCoverPage(doc, config, report)
+  await renderCoverPage(doc, config, report)
 
   let y = MARGIN
   const records = report.basicInfo.targetRecords
@@ -1255,7 +1343,7 @@ export async function generateHealthReportPdf(
       break
     case 'detailed':
     default:
-      y = renderDetailedTemplate(doc, report, trends, indicators, config, records)
+      y = await renderDetailedTemplate(doc, report, trends, indicators, config, records)
       break
   }
 
